@@ -450,7 +450,7 @@ function componentTagger(src, map) {
         if (!mutated)
             return done(null, src, map);
         const out = ms.toString();
-        const outMap = ms.generateMap({ hires: true });
+        const outMap = ms.generateMap({ hires: true, source: this.resourcePath });
         /* Turbopack expects the sourcemap as a JSON *string*. */
         done(null, out, JSON.stringify(outMap));
     }
