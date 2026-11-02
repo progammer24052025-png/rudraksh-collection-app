@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, Star } from "lucide-react";
+import { Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import { type Product, formatPrice } from "@/lib/store-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useCart } from "@/lib/cart-context";
+import { toast } from "sonner";
 
 type ProductCardProps = {
   product: Product;
@@ -14,69 +16,95 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
+  const { addItem } = useCart();
+  const displayPrice = product.sale_price ?? product.price;
+  const hasDiscount = product.sale_price != null && product.sale_price < product.price;
+
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!product.sizes.length) {
+      addItem(product.id, "Free Size", product.colors[0]?.name || "", 1);
+    } else {
+      addItem(product.id, product.sizes[0], product.colors[0]?.name || "", 1);
+    }
+    toast.success("Added to cart");
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.1 }}
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.4, delay: Math.min(index * 0.06, 0.3) }}
       className="group relative"
     >
-      <Link href={`/products/${product.id}`} className="block">
+      <Link href={`/products/${product.slug}`} className="block">
         <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-muted">
-          <Image
-            src={product.image}
-            alt={product.name}
-            fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+          {product.images[0] ? (
+            <Image
+              src={product.images[0]}
+              alt={product.name}
+              fill
+              className="object-cover transition-transform duration-700 group-hover:scale-105"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-muted-foreground">No image</div>
+          )}
 
-          {product.discount > 0 && (
+          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+          {hasDiscount && (
             <Badge className="absolute left-2 top-2 bg-destructive text-destructive-foreground">
-              -{product.discount}%
+              Sale
             </Badge>
           )}
-
-          {product.isNew && (
-            <Badge className="absolute left-2 top-2 bg-sage text-white">New</Badge>
-          )}
-
-          {product.isTrending && !product.isNew && product.discount === 0 && (
-            <Badge className="absolute left-2 top-2 bg-saffron text-white">Trending</Badge>
+          {product.is_sample && (
+            <Badge variant="outline" className="absolute right-2 top-2 bg-background/80 backdrop-blur">
+              Sample
+            </Badge>
           )}
 
           <Button
             variant="ghost"
             size="icon"
             className="absolute right-2 top-2 h-8 w-8 rounded-full bg-white/80 opacity-0 backdrop-blur transition-opacity hover:bg-white group-hover:opacity-100"
-            onClick={(e) => {
-              e.preventDefault();
-            }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            aria-label="Add to wishlist"
           >
             <Heart className="h-4 w-4" />
           </Button>
 
-          {!product.inStock && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-              <span className="font-medium text-white">Out of Stock</span>
+          {product.stock === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <span className="rounded bg-white/90 px-3 py-1 text-sm font-medium">Out of Stock</span>
             </div>
+          )}
+
+          {product.stock > 0 && (
+            <Button
+              size="sm"
+              className="absolute bottom-3 left-3 right-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              onClick={handleQuickAdd}
+            >
+              Quick Add
+            </Button>
           )}
         </div>
 
-        <div className="mt-3 space-y-1">
-          <h3 className="line-clamp-2 text-sm font-medium leading-tight">{product.name}</h3>
-          <div className="flex items-center gap-1">
-            <Star className="h-3 w-3 fill-saffron text-saffron" />
-            <span className="text-xs text-muted-foreground">
-              {product.rating} ({product.reviews})
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-primary">{formatPrice(product.price)}</span>
-            {product.originalPrice > product.price && (
+        <div className="mt-3 space-y-0.5">
+          {product.brand_name && (
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {product.brand_name}
+            </p>
+          )}
+          <h3 className="line-clamp-2 text-sm font-medium leading-snug">{product.name}</h3>
+          <div className="flex items-baseline gap-2">
+            <span className="font-semibold">{formatPrice(displayPrice)}</span>
+            {hasDiscount && (
               <span className="text-sm text-muted-foreground line-through">
-                {formatPrice(product.originalPrice)}
+                {formatPrice(product.price)}
               </span>
             )}
           </div>

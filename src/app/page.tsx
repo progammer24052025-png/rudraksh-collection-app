@@ -2,427 +2,354 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ChevronLeft, ChevronRight, Truck, RefreshCw, Shield, Headphones, Sparkles, TrendingUp, BadgePercent, Star } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { ArrowRight, MapPin, Phone, Clock, Star, Sparkles, Heart, Truck, Shield, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ProductCard } from "@/components/product-card";
 import { Button } from "@/components/ui/button";
-import { categories, products, banners } from "@/lib/store-data";
-import { CartProvider } from "@/lib/cart-context";
+import { CartProvider, useCart } from "@/lib/cart-context";
+import { ScrollStory } from "@/components/scroll-story";
+import { fetchProducts, type Product } from "@/lib/store-data";
+import { storeConfig, brands, collections } from "@/lib/config";
 
-function HeroBanner() {
-  const [currentBanner, setCurrentBanner] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentBanner((prev) => (prev + 1) % banners.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const banner = banners[currentBanner];
-
+function Hero3DLazy({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const [Mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!Mounted) return null;
   return (
-    <section className="relative h-[70vh] min-h-[500px] overflow-hidden">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentBanner}
-          initial={{ opacity: 0, scale: 1.1 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.7 }}
-          className="absolute inset-0"
-        >
-          <Image
-            src={banner.image}
-            alt={banner.title}
-            fill
-            className="object-cover"
-            priority
-          />
-        </motion.div>
-      </AnimatePresence>
-      
-      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-      
-      <div className="absolute inset-0 flex items-center">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentBanner}
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="max-w-xl text-white"
-            >
-              <motion.span
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 }}
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-saffron to-orange-500 px-5 py-2 text-sm font-semibold shadow-lg shadow-orange-500/25"
-              >
-                <Sparkles className="h-4 w-4" />
-                {banner.subtitle}
-              </motion.span>
-              <h1 className="mt-6 font-serif text-5xl font-bold leading-tight sm:text-6xl lg:text-7xl drop-shadow-lg">
-                {banner.title}
-              </h1>
-              <p className="mt-4 text-lg text-white/90 sm:text-xl">{banner.description}</p>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-              >
-                <Button asChild size="lg" className="mt-8 gap-2 rounded-full px-8 text-base shadow-lg shadow-primary/30">
-                  <Link href={banner.link}>
-                    {banner.cta}
-                    <ArrowRight className="h-5 w-5" />
-                  </Link>
-                </Button>
-              </motion.div>
-            </motion.div>
-          </AnimatePresence>
+    <Suspense fallback={null}>
+      <Hero3DInner scrollProgress={scrollProgress} />
+    </Suspense>
+  );
+}
+
+function Hero3DInner({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const { Hero3D } = require("@/components/hero-3d");
+  return <Hero3D scrollProgress={scrollProgress} />;
+}
+
+function HeroSection({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  return (
+    <section data-hero-scale className="relative flex min-h-[85vh] items-center overflow-hidden bg-cream">
+      {/* 3D background */}
+      <Hero3DLazy scrollProgress={scrollProgress} />
+
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/70 to-background/30" />
+
+      {/* Content */}
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl">
+          <p data-reveal className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-sage">
+            {storeConfig.category} — {storeConfig.location}
+          </p>
+          <h1 data-reveal className="font-serif text-5xl font-medium leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">
+            Little Styles.
+            <br />
+            <em className="text-rose">Big Personalities.</em>
+          </h1>
+          <p data-reveal className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
+            Discover comfortable, thoughtfully selected children&apos;s wear for everyday
+            adventures and special little moments.
+          </p>
+          <div data-reveal className="mt-8 flex flex-wrap gap-3">
+            <Button asChild size="lg" className="gap-2 rounded-full px-8">
+              <Link href="/products">
+                Explore the Collection
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-full px-8">
+              <Link href="/brands">Discover Our Brands</Link>
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 gap-3">
-        {banners.map((_, idx) => (
-          <button
-            key={idx}
-            onClick={() => setCurrentBanner(idx)}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              idx === currentBanner ? "w-10 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
-            }`}
-          />
-        ))}
+      {/* Scroll indicator */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce text-muted-foreground">
+        <div className="h-8 w-5 rounded-full border-2 border-muted-foreground/30">
+          <div className="mx-auto mt-1.5 h-2 w-1 rounded-full bg-muted-foreground/50" />
+        </div>
       </div>
-
-      <button
-        onClick={() => setCurrentBanner((prev) => (prev - 1 + banners.length) % banners.length)}
-        className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 backdrop-blur-md transition-all hover:bg-white/20 hover:scale-110"
-      >
-        <ChevronLeft className="h-6 w-6 text-white" />
-      </button>
-      <button
-        onClick={() => setCurrentBanner((prev) => (prev + 1) % banners.length)}
-        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 backdrop-blur-md transition-all hover:bg-white/20 hover:scale-110"
-      >
-        <ChevronRight className="h-6 w-6 text-white" />
-      </button>
     </section>
   );
 }
 
-function FloatingStatsBar() {
-  const stats = [
-    { value: "50K+", label: "Happy Customers" },
-    { value: "10K+", label: "Products" },
-    { value: "4.8", label: "Rating", icon: Star },
-    { value: "₹999", label: "Free Delivery" },
+function BrandGallery() {
+  return (
+    <section className="border-y border-border bg-secondary/30 py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div data-reveal className="mb-10 text-center">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Trusted Brands</p>
+          <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Curated for Little Ones</h2>
+        </div>
+        <div data-stagger className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+          {brands.map((brand) => (
+            <Link
+              key={brand.slug}
+              href={`/brands/${brand.slug}`}
+              className="group flex aspect-square items-center justify-center rounded-lg border border-border bg-card p-4 transition-all hover:border-sage/50 hover:shadow-md"
+            >
+              <span className="text-center text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+                {brand.name}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CollectionsSection() {
+  const collectionImages: Record<string, string> = {
+    "boys-wear": "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=600&h=750&fit=crop",
+    "girls-wear": "https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=600&h=750&fit=crop",
+    "baby-toddler": "https://images.unsplash.com/photo-1522771930-78848d9293e8?w=600&h=750&fit=crop",
+    "everyday-essentials": "https://images.unsplash.com/photo-1514090458221-65bb69cf63e6?w=600&h=750&fit=crop",
+    "casual-wear": "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=600&h=750&fit=crop",
+    "occasion-wear": "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=750&fit=crop",
+  };
+
+  return (
+    <section className="py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div data-reveal className="mb-12 flex items-end justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Shop by Collection</p>
+            <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Find Their Style</h2>
+          </div>
+          <Button asChild variant="ghost" className="hidden gap-1 sm:flex">
+            <Link href="/collections">
+              View All <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+
+        <div data-stagger className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {collections.slice(0, 6).map((col) => (
+            <Link
+              key={col.slug}
+              href={`/products?category=${col.slug}`}
+              className="group relative block aspect-[4/5] overflow-hidden rounded-lg bg-muted"
+            >
+              <Image
+                src={collectionImages[col.slug] || collectionImages["boys-wear"]}
+                alt={col.name}
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 33vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <h3 className="font-serif text-2xl font-medium text-white">{col.name}</h3>
+                <span className="mt-2 inline-flex items-center gap-1 text-sm text-white/80 transition-colors group-hover:text-white">
+                  Explore <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeaturedProducts({ products }: { products: Product[] }) {
+  const featured = products.filter(p => p.is_featured).slice(0, 8);
+  const display = featured.length >= 4 ? featured : products.slice(0, 8);
+
+  if (display.length === 0) return null;
+
+  return (
+    <section className="border-y border-border bg-secondary/20 py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div data-reveal className="mb-12 flex items-end justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">New Arrivals</p>
+            <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Fresh for This Season</h2>
+          </div>
+          <Button asChild variant="ghost" className="hidden gap-1 sm:flex">
+            <Link href="/products">
+              View All <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+          {display.map((product, idx) => (
+            <ProductCard key={product.id} product={product} index={idx} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function QualityStory() {
+  return (
+    <section className="py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          <div data-reveal>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Our Promise</p>
+            <h2 className="mt-3 font-serif text-3xl font-medium leading-snug sm:text-4xl">
+              Comfort They Forget They&apos;re Wearing
+            </h2>
+            <p className="mt-5 leading-relaxed text-muted-foreground">
+              Every piece in our collection is chosen with one thing in mind: how it feels on
+              little ones. Soft fabrics, thoughtful fits, and easy care — because childhood
+              should be about play, not fussing over clothes.
+            </p>
+            <div className="mt-8 grid grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-sage/10">
+                  <Heart className="h-6 w-6 text-sage" />
+                </div>
+                <p className="mt-3 text-sm font-medium">Gentle Fabrics</p>
+              </div>
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose/10">
+                  <Sparkles className="h-6 w-6 text-rose" />
+                </div>
+                <p className="mt-3 text-sm font-medium">Thoughtful Design</p>
+              </div>
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-saffron/10">
+                  <Shield className="h-6 w-6 text-saffron" />
+                </div>
+                <p className="mt-3 text-sm font-medium">Trusted Brands</p>
+              </div>
+            </div>
+          </div>
+          <div data-parallax="0.15" className="relative aspect-[4/5] overflow-hidden rounded-lg bg-muted">
+            <Image
+              src="https://images.unsplash.com/photo-1596870230751-ebdfce98ec42?w=700&h=900&fit=crop"
+              alt="Children's clothing detail"
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StoreVisit() {
+  return (
+    <section className="border-t border-border bg-secondary/30 py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div data-reveal className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Visit Us</p>
+          <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">See It, Feel It, Love It</h2>
+          <p className="mt-4 text-muted-foreground">
+            Visit our store in {storeConfig.location} to explore the full collection in person.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-4 w-4" /> {storeConfig.location}
+            </span>
+            {storeConfig.openingHours && (
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> {storeConfig.openingHours}
+              </span>
+            )}
+            {storeConfig.phone && (
+              <a href={`tel:${storeConfig.phone}`} className="flex items-center gap-1.5 hover:text-foreground">
+                <Phone className="h-4 w-4" /> {storeConfig.phone}
+              </a>
+            )}
+          </div>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg" className="rounded-full px-8">
+              <Link href="/visit">Plan Your Visit</Link>
+            </Button>
+            {storeConfig.googleMapsUrl && (
+              <Button asChild size="lg" variant="outline" className="rounded-full px-8">
+                <a href={storeConfig.googleMapsUrl} target="_blank" rel="noopener noreferrer">
+                  Get Directions
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TrustBar() {
+  const items = [
+    { icon: Truck, label: "Free Shipping", detail: `Orders above ₹${storeConfig.freeShippingThreshold}` },
+    { icon: RotateCcw, label: "Easy Returns", detail: "7-day return policy" },
+    { icon: Shield, label: "Secure Checkout", detail: "COD & online payment" },
+    { icon: Star, label: "4.84 Rating", detail: "Google reviews" },
   ];
 
   return (
-    <section className="relative z-10 -mt-12 px-4 sm:px-6 lg:px-8">
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="mx-auto max-w-5xl rounded-2xl bg-white/80 backdrop-blur-lg p-6 shadow-xl shadow-black/5 border border-white/20"
-      >
-        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-          {stats.map((stat, idx) => (
-            <div key={idx} className="text-center">
-              <div className="flex items-center justify-center gap-1">
-                {stat.icon && <stat.icon className="h-5 w-5 fill-saffron text-saffron" />}
-                <span className="text-2xl font-bold text-primary sm:text-3xl">{stat.value}</span>
+    <section className="border-t border-border py-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div data-stagger className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                <item.icon className="h-5 w-5 text-foreground/60" />
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+              <div>
+                <p className="text-sm font-medium">{item.label}</p>
+                <p className="text-xs text-muted-foreground">{item.detail}</p>
+              </div>
             </div>
           ))}
         </div>
-      </motion.div>
-    </section>
-  );
-}
-
-function CategorySection() {
-  return (
-    <section className="py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center"
-        >
-          <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
-            <Sparkles className="h-4 w-4" />
-            Shop by Category
-          </span>
-          <h2 className="mt-4 font-serif text-4xl font-bold">Find Your Perfect Style</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-            Explore our curated collections for men, women, and kids
-          </p>
-        </motion.div>
-        
-        <div className="mt-12 grid gap-6 sm:grid-cols-3">
-          {categories.map((category, idx) => (
-            <motion.div
-              key={category.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: idx * 0.15 }}
-            >
-              <Link
-                href={`/products?category=${category.id}`}
-                className="group relative block aspect-[4/5] overflow-hidden rounded-3xl shadow-lg"
-              >
-                <Image
-                  src={category.image}
-                  alt={category.name}
-                  fill
-                  className="object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                <div className="absolute inset-0 bg-primary/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <div className="absolute bottom-0 left-0 right-0 p-8">
-                  <h3 className="font-serif text-3xl font-bold text-white">{category.name}</h3>
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-medium text-white transition-all group-hover:bg-white group-hover:text-primary">
-                    Explore Collection
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </div>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
       </div>
     </section>
   );
 }
 
-function TrendingProducts() {
-  const trendingProducts = products.filter((p) => p.isTrending).slice(0, 4);
+function HomePageContent() {
+  const scrollProgress = useRef(0);
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      scrollProgress.current = Math.min(window.scrollY / window.innerHeight, 1);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    fetchProducts({ limit: "8" }).then(r => setProducts(r.products)).catch(() => {});
+  }, []);
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-secondary/50 to-background py-20">
-      <div className="absolute -left-32 top-0 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
-      <div className="absolute -right-32 bottom-0 h-64 w-64 rounded-full bg-saffron/5 blur-3xl" />
-      
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
-        >
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-saffron/10 px-4 py-1.5 text-sm font-medium text-saffron">
-              <TrendingUp className="h-4 w-4" />
-              Trending Now
-            </span>
-            <h2 className="mt-4 font-serif text-4xl font-bold">Most Loved Products</h2>
-            <p className="mt-2 text-muted-foreground">Discover what everyone&apos;s wearing this season</p>
-          </div>
-          <Button variant="outline" asChild className="rounded-full">
-            <Link href="/products?filter=trending">
-              View All
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </motion.div>
-        
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {trendingProducts.map((product, idx) => (
-            <ProductCard key={product.id} product={product} index={idx} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function BudgetPicks() {
-  const budgetProducts = products.filter((p) => p.isBudgetPick).slice(0, 4);
-
-  return (
-    <section className="py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
-        >
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-green-500/10 px-4 py-1.5 text-sm font-medium text-green-600">
-              <BadgePercent className="h-4 w-4" />
-              Budget Friendly
-            </span>
-            <h2 className="mt-4 font-serif text-4xl font-bold">Great Style, Great Prices</h2>
-            <p className="mt-2 text-muted-foreground">Quality fashion that won&apos;t break the bank</p>
-          </div>
-          <Button variant="outline" asChild className="rounded-full">
-            <Link href="/products?filter=budget">
-              View All
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </motion.div>
-        
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {budgetProducts.map((product, idx) => (
-            <ProductCard key={product.id} product={product} index={idx} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PromoBanner() {
-  return (
-    <section className="relative overflow-hidden py-20">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-terracotta" />
-      <div className="absolute inset-0">
-        <svg className="h-full w-full opacity-10" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <defs>
-            <pattern id="pattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="1.5" fill="currentColor" />
-            </pattern>
-          </defs>
-          <rect fill="url(#pattern)" width="100" height="100" />
-        </svg>
-      </div>
-      
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          className="text-center text-primary-foreground"
-        >
-          <motion.span
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-6 py-2 text-sm font-medium"
-          >
-            <Sparkles className="h-4 w-4" />
-            Limited Time Offer
-          </motion.span>
-          <h2 className="mt-6 font-serif text-4xl font-bold sm:text-5xl lg:text-6xl">
-            Festive Season Sale
-          </h2>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-primary-foreground/90 sm:text-xl">
-            Get up to <span className="font-bold text-saffron">50% OFF</span> on selected items.
-            Use code <span className="rounded-lg bg-white/20 px-3 py-1 font-bold">FESTIVE50</span> at checkout.
-          </p>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2 }}
-          >
-            <Button asChild size="lg" variant="secondary" className="mt-8 rounded-full px-8 text-base shadow-lg">
-              <Link href="/products">
-                Shop the Sale
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-          </motion.div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function Features() {
-  const features = [
-    { icon: Truck, title: "Free Shipping", description: "On orders above ₹999", color: "bg-blue-500/10 text-blue-600" },
-    { icon: RefreshCw, title: "Easy Returns", description: "7-day return policy", color: "bg-green-500/10 text-green-600" },
-    { icon: Shield, title: "Secure Payment", description: "100% secure checkout", color: "bg-purple-500/10 text-purple-600" },
-    { icon: Headphones, title: "24/7 Support", description: "Dedicated support team", color: "bg-orange-500/10 text-orange-600" },
-  ];
-
-  return (
-    <section className="border-t border-border py-16">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map((feature, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: idx * 0.1 }}
-              className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-lg"
-            >
-              <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${feature.color} transition-transform group-hover:scale-110`}>
-                <feature.icon className="h-7 w-7" />
-              </div>
-              <div>
-                <h3 className="font-semibold">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function NewsletterSection() {
-  return (
-    <section className="bg-muted/50 py-16">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mx-auto max-w-2xl text-center"
-        >
-          <h2 className="font-serif text-3xl font-bold">Stay Updated</h2>
-          <p className="mt-3 text-muted-foreground">
-            Subscribe to get exclusive offers, new arrivals & style tips
-          </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="h-12 rounded-full border border-border bg-background px-6 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-80"
-            />
-            <Button className="h-12 rounded-full px-8">Subscribe</Button>
-          </div>
-        </motion.div>
-      </div>
-    </section>
+    <div className="min-h-screen bg-background">
+      <Header />
+      <ScrollStory>
+        <main>
+          <HeroSection scrollProgress={scrollProgress} />
+          <BrandGallery />
+          <CollectionsSection />
+          <FeaturedProducts products={products} />
+          <QualityStory />
+          <StoreVisit />
+          <TrustBar />
+        </main>
+      </ScrollStory>
+      <Footer />
+    </div>
   );
 }
 
 export default function HomePage() {
   return (
     <CartProvider>
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main>
-          <HeroBanner />
-          <FloatingStatsBar />
-          <CategorySection />
-          <TrendingProducts />
-          <PromoBanner />
-          <BudgetPicks />
-          <Features />
-          <NewsletterSection />
-        </main>
-        <Footer />
-      </div>
+      <HomePageContent />
     </CartProvider>
   );
 }

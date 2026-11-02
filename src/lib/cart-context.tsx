@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { products, type Product, type CartItem } from "./store-data";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import type { Product, CartItem } from "./store-data";
 
 type CartContextType = {
   items: CartItem[];
@@ -12,6 +12,7 @@ type CartContextType = {
   getCartTotal: () => number;
   getCartCount: () => number;
   getProduct: (productId: string) => Product | undefined;
+  setProducts: (products: Product[]) => void;
   isHydrated: boolean;
 };
 
@@ -19,6 +20,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, isHydrated]);
 
-  const addItem = (productId: string, size: string, color: string, quantity = 1) => {
+  const addItem = useCallback((productId: string, size: string, color: string, quantity = 1) => {
     setItems((prev) => {
       const existing = prev.find(
         (item) => item.productId === productId && item.size === size && item.color === color
@@ -53,17 +55,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
       return [...prev, { productId, size, color, quantity }];
     });
-  };
+  }, []);
 
-  const removeItem = (productId: string, size: string, color: string) => {
+  const removeItem = useCallback((productId: string, size: string, color: string) => {
     setItems((prev) =>
       prev.filter(
         (item) => !(item.productId === productId && item.size === size && item.color === color)
       )
     );
-  };
+  }, []);
 
-  const updateQuantity = (productId: string, size: string, color: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, size: string, color: string, quantity: number) => {
     if (quantity <= 0) {
       removeItem(productId, size, color);
       return;
@@ -75,24 +77,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
           : item
       )
     );
-  };
+  }, [removeItem]);
 
-  const clearCart = () => setItems([]);
+  const clearCart = useCallback(() => setItems([]), []);
 
-  const getCartTotal = () => {
+  const getCartTotal = useCallback(() => {
     return items.reduce((total, item) => {
       const product = products.find((p) => p.id === item.productId);
-      return total + (product?.price || 0) * item.quantity;
+      const price = product?.sale_price ?? product?.price ?? 0;
+      return total + price * item.quantity;
     }, 0);
-  };
+  }, [items, products]);
 
-  const getCartCount = () => {
+  const getCartCount = useCallback(() => {
     return items.reduce((count, item) => count + item.quantity, 0);
-  };
+  }, [items]);
 
-  const getProduct = (productId: string) => {
+  const getProduct = useCallback((productId: string) => {
     return products.find((p) => p.id === productId);
-  };
+  }, [products]);
 
   return (
     <CartContext.Provider
@@ -105,6 +108,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         getCartTotal,
         getCartCount,
         getProduct,
+        setProducts,
         isHydrated,
       }}
     >
