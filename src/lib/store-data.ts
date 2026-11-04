@@ -1,71 +1,108 @@
 "use client";
 
-export type Product = {
-  id: string;
-  name: string;
-  slug: string;
-  brand_id: string | null;
-  category_id: string | null;
-  description: string;
-  price: number;
-  sale_price: number | null;
-  sku: string | null;
-  sizes: string[];
-  colors: { name: string; hex: string }[];
-  images: string[];
-  fabric: string | null;
-  care: string | null;
-  stock: number;
-  status: string;
-  is_sample: boolean;
-  is_featured: boolean;
-  created_at: string;
-  updated_at: string;
-  brand_name?: string;
-  brand_slug?: string;
-  category_name?: string;
-  category_slug?: string;
-};
+// Compatibility facade over the Firebase Realtime Database layer.
+// Storefront pages import from here; all reads/writes hit RTDB only.
 
-export type CartItem = {
-  productId: string;
-  quantity: number;
-  size: string;
-  color: string;
-};
+import {
+  effectivePrice,
+  fetchProductBySlug,
+  fetchProducts as fetchAllProducts,
+  formatPrice,
+  placeOrder,
+  type NewOrderInput,
+} from "./firebase";
+import type { CartItem, Order, Product } from "./types";
 
-export const formatPrice = (price: number) => {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 0,
-  }).format(price);
-};
+export type { CartItem, Order, Product };
+export { effectivePrice, formatPrice };
 
-// ── API fetchers ────────────────────────────────────────
-export async function fetchProducts(params: Record<string, string> = {}): Promise<{ products: Product[]; total: number }> {
-  const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`/api/products${qs ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error("Failed to load products");
-  return res.json();
+export interface ProductFilters {
+  brand?: string;
+  category?: string;
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sizes?: string[];
+  featured?: boolean;
+  inStock?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+const isActive = (product: Product) => product.status === "active";
+
+export function filterProducts(products: Product[], filters: ProductFilters = {}): Product[] {
+  let list = products.filter(isActive);
+
+  if (filters.brand) {
+    list = list.filter((p) => p.brand_slug === filters.brand || p.brand_id === filters.brand);
+  }
+  if (filters.category) {
+    list = list.filter((p) => p.category_slug === filters.category || p.category_id === filters.category);
+  }
+  if (filters.search) {
+    const term = filters.search.toLowerCase();
+    list = list.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.brand_name ?? "").toLowerCase().includes(term) ||
+        (p.category_name ?? "").toLowerCase().includes(term) ||
+        (p.description ?? "").toLowerCase().includes(term) ||
+        (p.tags ?? []).some((tag) => tag.toLowerCase().includes(term)),
+    );
+  }
+  if (filters.minPrice != null) list = list.filter((p) => effectivePrice(p) >= filters.minPrice!);
+  if (filters.maxPrice != null) list = list.filter((p) => effectivePrice(p) <= filters.maxPrice!);
+  if (filters.sizes?.length) {
+    list = list.filter((p) => p.sizes?.some((size) => filters.sizes!.includes(size)));
+  }
+  if (filters.featured) list = list.filter((p) => p.is_featured);
+  if (filters.inStock) list = list.filter((p) => (p.stock ?? 0) > 0);
+
+  list.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+
+  const offset = filters.offset ?? 0;
+  const limit = filters.limit ?? list.length;
+  return list.slice(offset, offset + limit);
+}
+
+export async function fetchProducts(
+  filters: ProductFilters = {},
+): Promise<{ products: Product[]; total: number }> {
+  const all = await fetchAllProducts();
+  const filtered = filterProducts(all, filters);
+  return { products: filtered, total: filtered.length };
 }
 
 export async function fetchProduct(slug: string): Promise<Product | null> {
-  const res = await fetch(`/api/products/${encodeURIComponent(slug)}`);
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to load product");
-  return res.json();
+  return fetchProductBySlug(slug);
 }
 
-export async function createOrder(data: Record<string, unknown>): Promise<{ ok: boolean; order?: { id: string; order_number: string }; error?: string }> {
-  const res = await fetch("/api/orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
+export interface CreateOrderResult {
+  ok: boolean;
+  order?: { id: string; order_number: string };
+  error?: string;
 }
 
+export async function createOrder(
+  data: Omit<NewOrderInput, "payment_method"> & { payment_method?: "cod" | "razorpay" },
+): Promise<CreateOrderResult> {
+  try {
+    const order = await placeOrder({
+      ...data,
+      payment_method: data.payment_method === "razorpay" ? "razorpay" : "cod",
+    });
+    return { ok: true, order: { id: order.id, order_number: order.order_number } };
+  } catch (error) {
+    console.error("Order creation failed:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not place the order. Please try again.",
+    };
+  }
+}
+
+/** @deprecated Seeding is handled by `npm run seed`, kept for API compatibility. */
 export async function seedDatabase(): Promise<void> {
-  await fetch("/api/seed", { method: "POST" });
+  console.warn("Seeding runs from the command line: npm run seed");
 }

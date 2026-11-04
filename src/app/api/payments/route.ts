@@ -1,0 +1,106 @@
+/**
+ * Starts an online payment.
+ *
+ * GET  → whether online payment is usable right now (admin toggle + keys +
+ *        secure checkout), and the public key id.
+ * POST → prices the bag from the database, then opens a Razorpay order for
+ *        exactly that amount. No order is written here: nothing is recorded
+ *        until `/api/checkout` has verified the payment.
+ */
+import { isSecureCheckout } from "@/lib/server/rtdb-admin";
+import { orderNumber, priceCart, type CartRequest } from "@/lib/server/price-cart";
+import {
+  createRazorpayOrder,
+  razorpayConfigured,
+  razorpayPublicKey,
+} from "@/lib/server/razorpay";
+
+export const dynamic = "force-dynamic";
+
+/** Razorpay's floor for an INR order, in paise. */
+const MIN_AMOUNT_PAISE = 100;
+
+export async function GET() {
+  const configured = razorpayConfigured();
+  const secure = isSecureCheckout();
+  return Response.json(
+    {
+      ok: true,
+      configured,
+      secure,
+      available: configured && secure,
+      keyId: configured ? razorpayPublicKey() : null,
+    },
+    { headers: { "cache-control": "no-store" } },
+  );
+}
+
+export async function POST(request: Request) {
+  if (!razorpayConfigured()) {
+    return Response.json(
+      { ok: false, error: "Online payment is not configured yet." },
+      { status: 503 },
+    );
+  }
+  if (!isSecureCheckout()) {
+    // Without the service account the order would have to be written by the
+    // browser after a real payment — if that write failed the customer would be
+    // charged with nothing to show for it. Refuse instead.
+    return Response.json(
+      { ok: false, error: "Online payment is unavailable right now. Please choose Cash on Delivery." },
+      { status: 503 },
+    );
+  }
+
+  let body: CartRequest;
+  try {
+    body = (await request.json()) as CartRequest;
+  } catch {
+    return Response.json({ ok: false, error: "Could not read the order." }, { status: 400 });
+  }
+
+  const priced = await priceCart(body);
+  if (!priced.ok) {
+    return Response.json({ ok: false, error: priced.error }, { status: priced.status });
+  }
+
+  const amountPaise = Math.round(priced.cart.totals.total * 100);
+  if (amountPaise < MIN_AMOUNT_PAISE) {
+    return Response.json(
+      { ok: false, error: "This order total is too small for online payment." },
+      { status: 400 },
+    );
+  }
+
+  const receipt = orderNumber();
+  try {
+    const order = await createRazorpayOrder({
+      amountPaise,
+      receipt,
+      notes: {
+        receipt,
+        items: String(priced.cart.orderItems.length),
+        ...(priced.cart.totals.couponCode ? { coupon: priced.cart.totals.couponCode } : {}),
+      },
+    });
+
+    return Response.json(
+      {
+        ok: true,
+        keyId: razorpayPublicKey(),
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        receipt,
+        totals: priced.cart.totals,
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  } catch (error) {
+    console.error("Razorpay order creation failed:", error);
+    return Response.json(
+      { ok: false, error: "We could not start the payment. Please try again." },
+      { status: 502 },
+    );
+  }
+}

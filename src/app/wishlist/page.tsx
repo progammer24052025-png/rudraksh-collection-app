@@ -7,30 +7,18 @@ import { Heart, Trash2, ShoppingBag } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
-import { CartProvider, useCart } from "@/lib/cart-context";
-import { formatPrice, fetchProducts, type Product } from "@/lib/store-data";
+import { useCart } from "@/lib/cart-context";
+import { formatPrice, type Product } from "@/lib/store-data";
+import { subscribeProducts } from "@/lib/firebase";
+import { useWishlist } from "@/lib/use-wishlist";
 import { toast } from "sonner";
 
 function WishlistContent() {
-  const [wishlist, setWishlist] = useState<string[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const { addItem } = useCart();
+  const { ids: wishlist, remove } = useWishlist();
 
-  useEffect(() => {
-    const saved = localStorage.getItem("rudraksh-wishlist");
-    if (saved) {
-      try { setWishlist(JSON.parse(saved)); } catch { setWishlist([]); }
-    }
-    fetchProducts({ limit: "100" }).then(r => setProducts(r.products)).catch(() => {});
-  }, []);
-
-  const toggleWishlist = (id: string) => {
-    setWishlist(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      localStorage.setItem("rudraksh-wishlist", JSON.stringify(next));
-      return next;
-    });
-  };
+  useEffect(() => subscribeProducts(setProducts), []);
 
   const wishlistProducts = products.filter(p => wishlist.includes(p.id));
 
@@ -63,7 +51,7 @@ function WishlistContent() {
               </Link>
               <div className="absolute right-2 top-2 flex gap-1.5">
                 <button
-                  onClick={() => toggleWishlist(product.id)}
+                  onClick={() => remove(product.id)}
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 backdrop-blur hover:bg-white"
                   aria-label="Remove from wishlist"
                 >
@@ -100,7 +88,7 @@ function WishlistContent() {
 
 export default function WishlistPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
@@ -108,6 +96,6 @@ export default function WishlistPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

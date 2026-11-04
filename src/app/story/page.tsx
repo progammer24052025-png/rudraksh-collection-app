@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { CartProvider } from "@/lib/cart-context";
 import { Button } from "@/components/ui/button";
-import { storeConfig } from "@/lib/config";
+import { useStore } from "@/lib/store-context";
 
 export default function StoryPage() {
+  const storeConfig = useStore();
+
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
@@ -65,6 +66,6 @@ export default function StoryPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

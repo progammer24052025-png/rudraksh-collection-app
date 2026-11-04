@@ -6,7 +6,6 @@ import { ChevronLeft } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ProductCard } from "@/components/product-card";
-import { CartProvider } from "@/lib/cart-context";
 import { fetchProducts, type Product } from "@/lib/store-data";
 import { brands } from "@/lib/config";
 
@@ -25,7 +24,7 @@ export default function BrandPage({ params }: { params: Promise<{ slug: string }
   }, [slug]);
 
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -72,6 +71,6 @@ export default function BrandPage({ params }: { params: Promise<{ slug: string }
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

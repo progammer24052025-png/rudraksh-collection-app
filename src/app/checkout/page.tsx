@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronLeft, MapPin, Banknote, Check, Shield, Loader2 } from "lucide-react";
@@ -10,10 +10,17 @@ import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CartProvider, useCart } from "@/lib/cart-context";
-import { formatPrice, createOrder } from "@/lib/store-data";
-import { storeConfig } from "@/lib/config";
+import { useCart } from "@/lib/cart-context";
+import { formatPrice, createOrder, fetchProducts } from "@/lib/store-data";
+import { computeTotals, normalizePricing, validateCoupon } from "@/lib/pricing";
+import { logActivity, readCoupon } from "@/lib/firebase";
+import type { Coupon, StoreSettings } from "@/lib/types";
+import { useStore } from "@/lib/store-context";
+import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
+import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
+import { ProgressSteps } from "@/components/kit/steps";
+import { AnimatedTicket } from "@/components/ui/ticket-confirmation-card";
 
 type Address = {
   fullName: string;
@@ -25,8 +32,53 @@ type Address = {
   pincode: string;
 };
 
+/** What Razorpay hands back after a successful payment. */
+type RazorpaySuccess = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayInstance = {
+  open: () => void;
+  on: (
+    event: "payment.failed",
+    handler: (payload: { error?: { description?: string } }) => void,
+  ) => void;
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayInstance;
+  }
+}
+
+/** Loads Razorpay's checkout script once; false means it could not load. */
+function loadRazorpay(): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (window.Razorpay) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-razorpay-checkout]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(Boolean(window.Razorpay)));
+      existing.addEventListener("error", () => resolve(false));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.dataset.razorpayCheckout = "true";
+    script.onload = () => resolve(Boolean(window.Razorpay));
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 function CheckoutContent() {
   const { items, getCartTotal, getProduct, clearCart, setProducts, isHydrated } = useCart();
+  const storeConfig = useStore();
+  const { user, profile } = useAuth();
   const [step, setStep] = useState<"address" | "payment" | "success">("address");
   const [address, setAddress] = useState<Address>({
     fullName: "", phone: "", email: "", address: "", city: "", state: "", pincode: "",
@@ -35,15 +87,109 @@ function CheckoutContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
 
-  const cartTotal = getCartTotal();
-  const shipping = cartTotal >= storeConfig.freeShippingThreshold ? 0 : storeConfig.shippingFee;
-  const grandTotal = cartTotal + shipping;
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
+
+  // Online payment is offered only when the gateway is configured and the
+  // server can write the order itself — never when the browser would have to.
+  const [onlineAvailable, setOnlineAvailable] = useState(false);
+  const [paymentIssue, setPaymentIssue] = useState<string | null>(null);
+  const paid = useRef(false);
+
+  useEffect(() => {
+    if (!storeConfig.razorpayEnabled) return;
+    let cancelled = false;
+    fetch("/api/payments")
+      .then((response) => response.json())
+      .then((data: { available?: boolean }) => {
+        if (!cancelled) setOnlineAvailable(Boolean(data.available));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [storeConfig.razorpayEnabled]);
+
+  // The same engine the server uses, so the customer never sees one total and
+  // gets charged another.
+  const pricing = normalizePricing({
+    freeShippingThreshold: storeConfig.freeShippingThreshold,
+    shippingFee: storeConfig.shippingFee,
+    tax: (storeConfig as unknown as StoreSettings).tax,
+  });
+
+  const lines = useMemo(
+    () =>
+      items.map((item) => {
+        const product = getProduct(item.productId);
+        const price =
+          product && typeof product.sale_price === "number" && product.sale_price > 0
+            ? product.sale_price
+            : product?.price ?? 0;
+        return {
+          productId: item.productId,
+          name: product?.name ?? "Item",
+          price,
+          quantity: item.quantity,
+        };
+      }),
+    [items, getProduct],
+  );
+
+  const totals = computeTotals({ lines, coupon, config: pricing });
+  const cartTotal = totals.subtotal;
+  const shipping = totals.shipping;
+  const grandTotal = totals.total;
+
+  async function applyCoupon() {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    setCouponBusy(true);
+    try {
+      const found = await readCoupon(code);
+      if (!found) {
+        setCoupon(null);
+        setCouponMessage("That code does not exist.");
+        return;
+      }
+      const check = validateCoupon(found, totals.subtotal);
+      if (!check.ok) {
+        setCoupon(null);
+        setCouponMessage(check.reason);
+        return;
+      }
+      setCoupon(found);
+      setCouponMessage(`${found.code} applied`);
+    } catch {
+      setCouponMessage("Could not check that code. Please try again.");
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  // Prefill from the signed-in profile's default address.
+  useEffect(() => {
+    if (!profile) return;
+    setAddress((current) => {
+      if (current.fullName || current.address) return current;
+      const saved = profile.addresses?.find((item) => item.isDefault) ?? profile.addresses?.[0];
+      return {
+        fullName: saved?.fullName || profile.displayName || current.fullName,
+        phone: saved?.phone || (profile.phone ? profile.phone.replace(/^\+91/, "") : current.phone),
+        email: profile.email || current.email,
+        address: saved?.address || current.address,
+        city: saved?.city || current.city,
+        state: saved?.state || current.state,
+        pincode: saved?.pincode || current.pincode,
+      };
+    });
+  }, [profile]);
 
   useEffect(() => {
     if (items.length > 0) {
-      fetch("/api/products?limit=100").then(r => r.json()).then(r => {
-        if (r.products) setProducts(r.products);
-      }).catch(() => {});
+      fetchProducts({ limit: 200 }).then(r => setProducts(r.products)).catch(() => {});
     }
   }, [items.length, setProducts]);
 
@@ -75,10 +221,72 @@ function CheckoutContent() {
     setStep("payment");
   };
 
-  const handlePlaceOrder = async () => {
-    setIsProcessing(true);
+  /**
+   * Records the order. `proof` is present only after Razorpay reports success;
+   * the server refuses a Razorpay order without a verified payment.
+   */
+  const submitOrder = async (proof?: RazorpaySuccess) => {
     try {
-      const orderItems = items.map(item => {
+      // The server re-prices the whole bag from the database and, when the
+      // service account is configured, writes the order itself.
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          user_id: user?.uid ?? null,
+          coupon_code: coupon?.code ?? null,
+          payment_method: paymentMethod,
+          payment_proof: proof,
+          customer: {
+            name: address.fullName,
+            phone: address.phone,
+            email: address.email,
+            address: address.address,
+            city: address.city,
+            state: address.state,
+            pincode: address.pincode,
+          },
+          items: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            size: item.size,
+            color: item.color,
+          })),
+        }),
+      });
+
+      const data = (await response.json()) as {
+        ok: boolean;
+        secure?: boolean;
+        error?: string;
+        payment_id?: string;
+        order?: { id: string; order_number: string } | null;
+      };
+
+      if (!data.ok) {
+        // Money moved but the order did not stick — the reference is what lets
+        // us reconcile instead of asking the customer to pay twice.
+        if (proof) {
+          setPaymentIssue(
+            data.payment_id
+              ? `Your payment (${data.payment_id}) went through, but the order could not be saved. Please contact us with this reference — do not pay again.`
+              : "Your payment may have gone through, but the order could not be saved. Please contact us before paying again.",
+          );
+        }
+        toast.error(data.error || "Could not place the order");
+        return;
+      }
+
+      if (data.secure && data.order) {
+        setOrderNumber(data.order.order_number);
+        clearCart();
+        setStep("success");
+        toast.success("Order placed successfully!");
+        return;
+      }
+
+      // Server priced the order but cannot write without the service account.
+      const orderItems = items.map((item) => {
         const product = getProduct(item.productId);
         return {
           productId: item.productId,
@@ -87,27 +295,40 @@ function CheckoutContent() {
           size: item.size,
           color: item.color,
           quantity: item.quantity,
-          price: product?.sale_price ?? product?.price ?? 0,
+          price:
+            product && typeof product.sale_price === "number" && product.sale_price > 0
+              ? product.sale_price
+              : product?.price ?? 0,
           image: product?.images[0] || "",
         };
       });
 
       const result = await createOrder({
+        user_id: user?.uid ?? null,
         customer_name: address.fullName,
         phone: address.phone,
-        email: address.email || undefined,
+        email: address.email || null,
         address: address.address,
         city: address.city,
         state: address.state,
         pincode: address.pincode,
         items: orderItems,
-        subtotal: cartTotal,
-        shipping,
-        total: grandTotal,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        tax: totals.tax,
+        coupon_code: totals.couponCode,
+        shipping: totals.shipping,
+        total: totals.total,
         payment_method: paymentMethod,
       });
 
       if (result.ok && result.order) {
+        void logActivity(user?.uid, {
+          type: "order",
+          label: `Order ${result.order.order_number} placed`,
+          meta: formatPrice(totals.total),
+          href: "/track-order",
+        });
         setOrderNumber(result.order.order_number);
         clearCart();
         setStep("success");
@@ -116,7 +337,107 @@ function CheckoutContent() {
         toast.error(result.error || "Failed to place order");
       }
     } catch {
+      if (proof) {
+        setPaymentIssue(
+          `We lost the connection while confirming payment ${proof.razorpay_payment_id}. Please contact us with this reference before paying again.`,
+        );
+      }
       toast.error("Failed to place order. Please try again.");
+    }
+  };
+
+  /** Opens Razorpay; the order is only submitted from its success handler. */
+  const payWithRazorpay = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setPaymentIssue(null);
+    paid.current = false;
+
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded || !window.Razorpay) {
+        toast.error("Could not open the payment window. Check your connection and try again.");
+        return;
+      }
+
+      const priced = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          user_id: user?.uid ?? null,
+          coupon_code: coupon?.code ?? null,
+          items: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            size: item.size,
+            color: item.color,
+          })),
+        }),
+      });
+
+      const order = (await priced.json()) as {
+        ok: boolean;
+        error?: string;
+        keyId: string;
+        orderId: string;
+        amount: number;
+        currency: string;
+        receipt: string;
+      };
+
+      if (!order.ok) {
+        toast.error(order.error || "Online payment is unavailable right now.");
+        return;
+      }
+
+      const checkout = new window.Razorpay({
+        key: order.keyId,
+        order_id: order.orderId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Rudraksh Collection",
+        description: `Order ${order.receipt}`,
+        prefill: {
+          name: address.fullName,
+          email: address.email || undefined,
+          contact: `+91${address.phone}`,
+        },
+        notes: { receipt: order.receipt },
+        theme: { color: "#8B9A7D" },
+        retry: { enabled: true },
+        handler: (result: RazorpaySuccess) => {
+          paid.current = true;
+          void submitOrder(result).finally(() => setIsProcessing(false));
+        },
+        modal: {
+          ondismiss: () => {
+            if (paid.current) return; // success already handled
+            setIsProcessing(false);
+            toast.error("Payment cancelled — no order was placed.");
+          },
+        },
+      });
+
+      checkout.on("payment.failed", (failure: { error?: { description?: string } }) => {
+        setIsProcessing(false);
+        toast.error(failure?.error?.description || "That payment did not go through. No order was placed.");
+      });
+
+      checkout.open();
+    } catch {
+      toast.error("Could not start the payment. Please try again.");
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    if (paymentMethod === "razorpay") {
+      await payWithRazorpay();
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await submitOrder();
     } finally {
       setIsProcessing(false);
     }
@@ -124,31 +445,39 @@ function CheckoutContent() {
 
   if (step === "success") {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center sm:px-6">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sage/10"
-        >
-          <Check className="h-10 w-10 text-sage" />
-        </motion.div>
-        <h1 className="mt-6 font-serif text-2xl font-medium">Order Confirmed!</h1>
-        <p className="mt-2 text-muted-foreground">
-          Thank you for shopping with Rudraksh Collection.
-        </p>
-        {orderNumber && (
-          <p className="mt-3 text-sm">
-            Order number: <span className="font-mono font-medium">{orderNumber}</span>
-          </p>
-        )}
-        <p className="mt-2 text-sm text-muted-foreground">
-          We&apos;ll contact you shortly to confirm your order.
-        </p>
-        <div className="mt-8 flex flex-col gap-3">
-          <Button asChild>
+      <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-12 sm:px-6">
+        <AnimatedTicket
+          ticketId={orderNumber ?? "—"}
+          amount={totals.total}
+          date={new Date()}
+          cardHolder={address.fullName || "Guest"}
+          paymentLabel={paymentMethod === "cod" ? "Cash on delivery" : "Paid online"}
+          barcodeValue={orderNumber ?? "RUDRAKSH"}
+          lines={[
+            { label: "Subtotal", value: formatPrice(totals.subtotal) },
+            ...(totals.discount > 0
+              ? [{ label: totals.couponCode ? `Discount (${totals.couponCode})` : "Discount", value: `−${formatPrice(totals.discount)}` }]
+              : []),
+            { label: "Shipping", value: totals.shipping === 0 ? "Free" : formatPrice(totals.shipping), muted: totals.shipping === 0 },
+            { label: "Total", value: formatPrice(totals.total) },
+          ]}
+          note={
+            pricing.tax.enabled
+              ? `Includes ${formatPrice(totals.tax)} ${pricing.tax.label}. We'll contact you shortly to confirm your order.`
+              : "We'll contact you shortly to confirm your order."
+          }
+        />
+
+        <div className="mt-8 flex w-full max-w-sm flex-col gap-3">
+          {orderNumber && (
+            <Button asChild>
+              <Link href={`/track-order?order=${orderNumber}`}>Track this order</Link>
+            </Button>
+          )}
+          <Button variant="outline" asChild>
             <Link href="/products">Continue Shopping</Link>
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="ghost" asChild>
             <Link href="/account">View Orders</Link>
           </Button>
         </div>
@@ -158,30 +487,19 @@ function CheckoutContent() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        href="/cart"
-        className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" /> Back to Cart
-      </Link>
+      <PageBreadcrumb items={[{ label: "Cart", href: "/cart" }, { label: "Checkout" }]} className="-mt-2 mb-2" />
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="mb-6 flex items-center gap-4">
-            {(["address", "payment"] as const).map((s, i) => (
-              <div key={s} className="flex items-center gap-4">
-                {i > 0 && <div className="h-px w-12 bg-border sm:w-24" />}
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-                  step === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}>
-                  {i + 1}
-                </div>
-                <span className={step === s ? "text-sm font-medium" : "text-sm text-muted-foreground"}>
-                  {s === "address" ? "Delivery Address" : "Payment"}
-                </span>
-              </div>
-            ))}
-          </div>
+          <ProgressSteps
+            items={[
+              { title: "Delivery address", description: "Where it goes" },
+              { title: "Payment", description: "How you pay" },
+            ]}
+            current={step === "payment" ? 1 : 0}
+            onStepChange={(next) => setStep(next === 0 ? "address" : "payment")}
+            className="mb-8"
+          />
 
           {step === "address" && (
             <motion.div
@@ -288,7 +606,7 @@ function CheckoutContent() {
                     </div>
                   </label>
 
-                  {storeConfig.razorpayEnabled && (
+                  {onlineAvailable && (
                     <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
                       paymentMethod === "razorpay" ? "border-primary bg-primary/5" : "border-border"
                     }`}>
@@ -305,12 +623,26 @@ function CheckoutContent() {
                   )}
                 </div>
 
+                {storeConfig.razorpayEnabled && !onlineAvailable && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Online payment is unavailable right now — Cash on Delivery is open as usual.
+                  </p>
+                )}
+
+                {paymentIssue && (
+                  <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs leading-relaxed text-destructive">
+                    {paymentIssue}
+                  </p>
+                )}
+
                 <Button
                   size="lg" className="mt-6 w-full"
                   onClick={handlePlaceOrder} disabled={isProcessing}
                 >
                   {isProcessing ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing Order...</>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {paymentMethod === "razorpay" ? "Waiting for payment..." : "Placing Order..."}</>
+                  ) : paymentMethod === "razorpay" ? (
+                    `Pay ${formatPrice(grandTotal)}`
                   ) : (
                     `Place Order — ${formatPrice(grandTotal)}`
                   )}
@@ -318,7 +650,7 @@ function CheckoutContent() {
 
                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <Shield className="h-4 w-4" />
-                  <span>Secure checkout</span>
+                  <span>{paymentMethod === "razorpay" ? "Secure payment by Razorpay" : "Secure checkout"}</span>
                 </div>
               </div>
             </motion.div>
@@ -351,18 +683,82 @@ function CheckoutContent() {
               })}
             </div>
 
-            <div className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatPrice(cartTotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Shipping</span>
-                <span>{shipping === 0 ? <span className="text-sage">FREE</span> : formatPrice(shipping)}</span>
-              </div>
-              <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
-                <span>Total</span>
-                <span>{formatPrice(grandTotal)}</span>
+            <div className="mt-4 border-t border-border pt-4">
+              {coupon ? (
+                <div className="mb-3 flex items-center justify-between rounded-lg bg-sage/10 px-3 py-2 text-sm">
+                  <span className="font-mono text-xs font-semibold text-foreground">{coupon.code}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCoupon(null);
+                      setCouponInput("");
+                      setCouponMessage(null);
+                    }}
+                    className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-3 flex gap-2">
+                  <Input
+                    value={couponInput}
+                    onChange={(event) => setCouponInput(event.target.value.toUpperCase())}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void applyCoupon();
+                      }
+                    }}
+                    placeholder="Coupon code"
+                    className="h-10 font-mono uppercase"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void applyCoupon()}
+                    disabled={couponBusy || !couponInput.trim()}
+                  >
+                    {couponBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                  </Button>
+                </div>
+              )}
+              {couponMessage && !coupon ? (
+                <p className="mb-3 text-xs text-destructive">{couponMessage}</p>
+              ) : null}
+
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatPrice(cartTotal)}</span>
+                </div>
+                {totals.discount > 0 ? (
+                  <div className="flex justify-between text-sage">
+                    <span>Discount</span>
+                    <span>−{formatPrice(totals.discount)}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Shipping</span>
+                  <span>{shipping === 0 ? <span className="text-sage">FREE</span> : formatPrice(shipping)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
+                  <span>Total</span>
+                  <span>{formatPrice(grandTotal)}</span>
+                </div>
+                {pricing.tax.enabled && pricing.tax.inclusive ? (
+                  <p className="text-xs text-muted-foreground">
+                    Includes {formatPrice(totals.tax)} {pricing.tax.label} ({Math.round(pricing.tax.rate * 1000) / 10}%)
+                  </p>
+                ) : null}
+                {!pricing.tax.inclusive && pricing.tax.enabled ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {pricing.tax.label} ({Math.round(pricing.tax.rate * 1000) / 10}%)
+                    </span>
+                    <span>{formatPrice(totals.tax)}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -374,7 +770,7 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
@@ -382,6 +778,6 @@ export default function CheckoutPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

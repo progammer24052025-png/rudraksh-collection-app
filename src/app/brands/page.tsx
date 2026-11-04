@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { CartProvider } from "@/lib/cart-context";
 import { brands } from "@/lib/config";
 import { motion } from "framer-motion";
 
 export default function BrandsPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -48,6 +47,6 @@ export default function BrandsPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

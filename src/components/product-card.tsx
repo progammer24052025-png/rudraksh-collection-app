@@ -8,6 +8,7 @@ import { type Product, formatPrice } from "@/lib/store-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/lib/cart-context";
+import { useWishlist } from "@/lib/use-wishlist";
 import { toast } from "sonner";
 
 type ProductCardProps = {
@@ -17,8 +18,17 @@ type ProductCardProps = {
 
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem } = useCart();
+  const { toggle, has } = useWishlist();
+  const saved = has(product.id);
   const displayPrice = product.sale_price ?? product.price;
   const hasDiscount = product.sale_price != null && product.sale_price < product.price;
+
+  const handleWishlist = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggle(product.id);
+    toast.success(saved ? "Removed from wishlist" : "Saved to wishlist");
+  };
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -60,20 +70,19 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               Sale
             </Badge>
           )}
-          {product.is_sample && (
-            <Badge variant="outline" className="absolute right-2 top-2 bg-background/80 backdrop-blur">
-              Sample
-            </Badge>
-          )}
+
 
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-2 top-2 h-8 w-8 rounded-full bg-white/80 opacity-0 backdrop-blur transition-opacity hover:bg-white group-hover:opacity-100"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            aria-label="Add to wishlist"
+            className={`absolute right-2 top-2 h-8 w-8 rounded-full bg-white/85 backdrop-blur transition-opacity hover:bg-white ${
+              saved ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+            onClick={handleWishlist}
+            aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
+            aria-pressed={saved}
           >
-            <Heart className="h-4 w-4" />
+            <Heart className={`h-4 w-4 ${saved ? "fill-rose text-rose" : ""}`} />
           </Button>
 
           {product.stock === 0 && (

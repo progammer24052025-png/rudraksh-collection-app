@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { siteUrl } from "@/lib/config";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -6,9 +7,10 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/api"],
+        disallow: ["/admin", "/admin/", "/api/", "/account", "/checkout"],
       },
     ],
-    sitemap: "https://rudrakshcollection.in/sitemap.xml", // TODO: update with actual domain
+    sitemap: `${siteUrl}/sitemap.xml`,
+    host: siteUrl,
   };
 }

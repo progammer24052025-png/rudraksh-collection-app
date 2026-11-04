@@ -8,17 +8,19 @@ import { ChevronLeft, Heart, Truck, RotateCcw, Shield, Minus, Plus, Check } from
 import { motion } from "framer-motion";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { ProductCard } from "@/components/product-card";
+import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
+import { ClothingRailHero, type RailGarment } from "@/components/ui/product-rail-gallery";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CartProvider, useCart } from "@/lib/cart-context";
+import { useCart } from "@/lib/cart-context";
 import { fetchProduct, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
-import { storeConfig } from "@/lib/config";
+import { useStore } from "@/lib/store-context";
 import { toast } from "sonner";
 
 function ProductDetailContent() {
+  const storeConfig = useStore();
   const params = useParams();
   const slug = params.id as string;
   const [product, setProduct] = useState<Product | null>(null);
@@ -39,7 +41,7 @@ function ProductDetailContent() {
       setProduct(p);
       if (p) {
         setProducts([p]);
-        fetchProducts({ category: p.category_slug || "", limit: "4" }).then(r => {
+        fetchProducts({ category: p.category_slug || "", limit: 4 }).then(r => {
           setRelated(r.products.filter(x => x.id !== p.id).slice(0, 4));
         }).catch(() => {});
       }
@@ -97,14 +99,31 @@ function ProductDetailContent() {
     }
   };
 
+  const railItems: RailGarment[] = related
+    .filter((p) => p.images.length > 0)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.brand_name ? `${p.brand_name} · ${formatPrice(p.sale_price ?? p.price)}` : formatPrice(p.sale_price ?? p.price),
+      image: p.images[0],
+      cutout: p.image_cutout ?? undefined,
+      tag: formatPrice(p.sale_price ?? p.price),
+      href: `/products/${p.id}`,
+      details: [p.brand_name, p.category_name, p.fabric].filter((value): value is string => Boolean(value)),
+    }));
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        href="/products"
-        className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" /> Back to Products
-      </Link>
+      <PageBreadcrumb
+        items={[
+          { label: "Shop", href: "/products" },
+          ...(product.brand_slug
+            ? [{ label: product.brand_name ?? product.brand_slug, href: `/products?brand=${product.brand_slug}` }]
+            : []),
+          { label: product.name },
+        ]}
+        className="-mt-2"
+      />
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Gallery */}
@@ -315,12 +334,18 @@ function ProductDetailContent() {
 
       {related.length > 0 && (
         <section className="mt-16">
-          <h2 className="mb-6 font-serif text-2xl font-medium">You May Also Like</h2>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((p, idx) => (
-              <ProductCard key={p.id} product={p} index={idx} />
-            ))}
-          </div>
+          <ClothingRailHero
+            hanger="wood"
+            eyebrow="From the same rail"
+            heading="You may also like"
+            caption="Move along the rail, or open a piece to shop it."
+            items={railItems}
+            action={
+              <Button asChild variant="outline">
+                <Link href="/products">Shop all pieces</Link>
+              </Button>
+            }
+          />
         </section>
       )}
     </div>
@@ -329,7 +354,7 @@ function ProductDetailContent() {
 
 export default function ProductDetailPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
@@ -337,6 +362,6 @@ export default function ProductDetailPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

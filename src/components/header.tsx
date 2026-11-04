@@ -6,19 +6,23 @@ import { ShoppingBag, User, Search, Menu, X, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
+import { useStore } from "@/lib/store-context";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 
 const NAV_LINKS = [
   { label: "Shop", href: "/products" },
+  { label: "Offers", href: "/offers" },
   { label: "Collections", href: "/collections" },
   { label: "Brands", href: "/brands" },
   { label: "Our Story", href: "/story" },
   { label: "Visit Store", href: "/visit" },
+  { label: "Contact", href: "/contact" },
 ];
 
 export function Header() {
   const { getCartCount, isHydrated } = useCart();
+  const store = useStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [scrolled, setScrolled] = useState(false);
@@ -49,6 +53,12 @@ export function Header() {
           : "border-b border-transparent bg-background/0"
       }`}
     >
+      {store.announcement && (
+        <div className="bg-primary px-4 py-2 text-center text-xs font-medium text-primary-foreground sm:text-sm">
+          {store.announcement}
+        </div>
+      )}
+
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-4 lg:hidden">
           <Sheet>
@@ -163,6 +173,12 @@ function MobileNav() {
           </Link>
           <Link href="/wishlist" className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
             Wishlist
+          </Link>
+          <Link href="/track-order" className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
+            Track Order
+          </Link>
+          <Link href="/faq" className="flex items-center rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
+            FAQs
           </Link>
         </div>
       </nav>

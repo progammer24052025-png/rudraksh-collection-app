@@ -3,13 +3,14 @@
 import { MapPin, Phone, Clock, MessageCircle, Navigation } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { CartProvider } from "@/lib/cart-context";
 import { Button } from "@/components/ui/button";
-import { storeConfig } from "@/lib/config";
+import { useStore } from "@/lib/store-context";
 
 export default function VisitPage() {
+  const storeConfig = useStore();
+
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
@@ -129,6 +130,6 @@ export default function VisitPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useRef, Suspense, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Float, TextureLoader } from "@react-three/drei";
+import { Float } from "@react-three/drei";
 import * as THREE from "three";
 
 const IMAGES = [

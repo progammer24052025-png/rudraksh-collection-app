@@ -1,23 +1,41 @@
+// ─────────────────────────────────────────────────────────────
+// Static store configuration — the fallback used when the store has
+// not yet saved its contact details in Admin → Settings.
+// Anything left empty is hidden from the UI rather than shown as a
+// broken link, and can be filled in from the admin dashboard.
+// ─────────────────────────────────────────────────────────────
+
 export const storeConfig = {
   name: "Rudraksh Collection",
+  legalName: "Rudraksh Collection",
   tagline: "Little Moments, Beautifully Dressed",
   category: "Children's Wear",
   location: "Vadodara, Gujarat, India",
+  city: "Vadodara",
+  state: "Gujarat",
+  country: "India",
   googleRating: 4.84,
   googleReviewCount: null as number | null,
 
-  address: "", // TODO: owner to supply
-  phone: "", // TODO: owner to supply
-  whatsapp: "", // TODO: owner to supply
-  email: "hello@rudrakshcollection.in", // placeholder
-  openingHours: "", // TODO: owner to supply
-  googleMapsUrl: "", // TODO: owner to supply
-  instagram: "", // TODO: owner to supply
+  // ── Contact details (edit in Admin → Settings) ──
+  address: "",
+  phone: "",
+  whatsapp: "",
+  email: "hello@rudrakshcollection.in",
+  openingHours: "",
+  googleMapsUrl: "",
+  instagram: "",
 
+  // ── Commerce ──
   freeShippingThreshold: 999,
   shippingFee: 99,
   codAvailable: true,
-  razorpayEnabled: false, // set true when keys are configured
+  razorpayEnabled: false,
+  returnWindowDays: 7,
+  dispatchDays: "1–2 business days",
+  deliveryDays: "3–7 business days",
+  currency: "INR",
+  gstin: "",
 };
 
 export const brands = [
@@ -44,5 +62,17 @@ export const collections = [
   { slug: "occasion-wear", name: "Occasion Wear" },
 ] as const;
 
+export const collectionImages: Record<string, string> = {
+  "boys-wear": "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=900&h=1125&fit=crop",
+  "girls-wear": "https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=900&h=1125&fit=crop",
+  "baby-toddler": "https://images.unsplash.com/photo-1522771930-78848d9293e8?w=900&h=1125&fit=crop",
+  "everyday-essentials": "https://images.unsplash.com/photo-1514090458221-65bb69cf63e6?w=900&h=1125&fit=crop",
+  "casual-wear": "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=900&h=1125&fit=crop",
+  "occasion-wear": "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=900&h=1125&fit=crop",
+};
+
 export type CollectionSlug = (typeof collections)[number]["slug"];
 export type BrandSlug = (typeof brands)[number]["slug"];
+
+export const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://rudrakshcollection.in";

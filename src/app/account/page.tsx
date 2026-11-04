@@ -1,21 +1,74 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { User, Package, MapPin, Heart, LogOut, Phone, ChevronRight, Mail, Shield, CheckCircle2, Sparkles, Edit2, Plus, Trash2, AlertCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Edit2,
+  Heart,
+  Loader2,
+  LogOut,
+  Mail,
+  MapPin,
+  Package,
+  Phone,
+  Plus,
+  Shield,
+  Sparkles,
+  Trash2,
+  User,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CartProvider } from "@/lib/cart-context";
-import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { type Address } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
+import { useStore } from "@/lib/store-context";
+import {
+  formatPrice,
+  normalizeAddress,
+  subscribeProducts,
+  subscribeUserOrders,
+} from "@/lib/firebase";
+import type { ActivityEvent, Address, Order, Product } from "@/lib/types";
+import type { LucideIcon } from "lucide-react";
+import { useWishlist } from "@/lib/use-wishlist";
+import { SignInForm } from "@/components/kit/sign-in-form";
+import { AccountSection, ActivityRow } from "@/components/kit/account-card";
+import { PageSpinner } from "@/components/kit/spinner";
+import {
+  createEmailAccount,
+  logActivity,
+  setRememberSession,
+  signInWithEmailAccount,
+  subscribeActivity,
+} from "@/lib/firebase";
+
+const ORDER_STEPS: Array<{ key: Order["order_status"]; label: string }> = [
+  { key: "placed", label: "Placed" },
+  { key: "confirmed", label: "Confirmed" },
+  { key: "packed", label: "Packed" },
+  { key: "shipped", label: "Shipped" },
+  { key: "delivered", label: "Delivered" },
+];
+
+const statusClasses: Record<string, string> = {
+  placed: "bg-muted text-muted-foreground",
+  confirmed: "bg-amber-100 text-amber-700",
+  packed: "bg-amber-100 text-amber-700",
+  shipped: "bg-blue-100 text-blue-700",
+  delivered: "bg-sage/10 text-sage",
+  cancelled: "bg-destructive/10 text-destructive",
+};
 
 function GoogleIcon() {
   return (
@@ -30,454 +83,749 @@ function GoogleIcon() {
 
 function FirebaseNotConfigured() {
   return (
-    <div className="relative min-h-[80vh] overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-saffron/5" />
-      <div className="relative mx-auto max-w-md px-4 py-16 sm:px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
-            <AlertCircle className="h-10 w-10 text-amber-600" />
-          </div>
-          <h1 className="mt-6 font-serif text-2xl font-bold">Firebase Setup Required</h1>
-          <p className="mt-3 text-muted-foreground">
-            To enable authentication, please configure Firebase credentials in your environment variables.
-          </p>
-          
-            <div className="mt-8 rounded-xl border border-border bg-card p-6 text-left">
-              <h3 className="font-semibold mb-3">Required Environment Variables:</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground font-mono">
-                <li>NEXT_PUBLIC_FIREBASE_API_KEY</li>
-                <li>NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN</li>
-                <li>NEXT_PUBLIC_FIREBASE_PROJECT_ID</li>
-                <li>NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET</li>
-                <li>NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID</li>
-                <li>NEXT_PUBLIC_FIREBASE_APP_ID</li>
-              </ul>
-            </div>
-
-          <Button asChild className="mt-6">
-            <Link href="/">Continue Shopping</Link>
-          </Button>
-        </motion.div>
+    <div className="mx-auto max-w-md px-4 py-20 text-center sm:px-6">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
+        <AlertCircle className="h-10 w-10 text-amber-600" />
       </div>
+      <h1 className="mt-6 font-serif text-2xl font-bold">Sign-in is not configured</h1>
+      <p className="mt-3 text-muted-foreground">
+        Firebase credentials are missing from this deployment. Add the{" "}
+        <code className="rounded bg-muted px-1">NEXT_PUBLIC_FIREBASE_*</code> environment variables
+        and rebuild.
+      </p>
+      <Button asChild className="mt-6">
+        <Link href="/">Continue Shopping</Link>
+      </Button>
     </div>
   );
 }
 
 function LoginScreen() {
-  const { initRecaptcha, sendPhoneOTP, verifyPhoneOTP, loginWithGoogle, error, clearError, isConfigured } = useAuth();
+  const { initRecaptcha, sendPhoneOTP, verifyPhoneOTP, loginWithGoogle, error, clearError, isConfigured } =
+    useAuth();
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [isLoading, setIsLoading] = useState(false);
-  const recaptchaRef = useRef<HTMLDivElement>(null);
-  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const [busy, setBusy] = useState<"otp" | "verify" | "google" | null>(null);
+  const [mode, setMode] = useState<"email" | "phone">("email");
+  const [creating, setCreating] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const recaptchaHostId = "recaptcha-container";
+
+  const authMessage = (code: string) => {
+    switch (code) {
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+      case "auth/user-not-found":
+        return "That email and password do not match.";
+      case "auth/email-already-in-use":
+        return "That email already has an account — sign in instead.";
+      case "auth/weak-password":
+        return "Use at least 6 characters for the password.";
+      case "auth/invalid-email":
+        return "That email address looks incomplete.";
+      case "auth/too-many-requests":
+        return "Too many attempts. Wait a minute and try again.";
+      default:
+        return "Could not sign you in. Please try again.";
+    }
+  };
+
+  const handleEmail = async ({ email, password, remember }: { email: string; password: string; remember: boolean }) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      await setRememberSession(remember);
+      if (creating) await createEmailAccount(email, password);
+      else await signInWithEmailAccount(email, password);
+      toast.success(creating ? "Account created" : "Signed in");
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? "unknown";
+      setAuthError(authMessage(code));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (isConfigured && recaptchaRef.current) {
-      initRecaptcha("recaptcha-container");
-    }
+    if (isConfigured) initRecaptcha(recaptchaHostId);
   }, [initRecaptcha, isConfigured]);
 
-  if (!isConfigured) {
-    return <FirebaseNotConfigured />;
-  }
+  if (!isConfigured) return <FirebaseNotConfigured />;
 
   const handleSendOTP = async () => {
     if (phone.length !== 10) {
-      toast.error("Please enter a valid 10-digit phone number");
+      toast.error("Enter a valid 10-digit mobile number");
       return;
     }
-    setIsLoading(true);
-    const success = await sendPhoneOTP(phone);
-    setIsLoading(false);
-    if (success) {
+    setBusy("otp");
+    const ok = await sendPhoneOTP(phone);
+    setBusy(null);
+    if (ok) {
       setStep("otp");
-      toast.success("OTP sent successfully!");
-    } else if (error) {
-      toast.error(error);
-      clearError();
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    if (otp.length !== 6) {
-      toast.error("Please enter a valid 6-digit OTP");
-      return;
-    }
-    setIsLoading(true);
-    const success = await verifyPhoneOTP(otp);
-    setIsLoading(false);
-    if (success) {
-      toast.success("Phone verified successfully!");
-    } else if (error) {
-      toast.error(error);
-      clearError();
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    const success = await loginWithGoogle();
-    setIsLoading(false);
-    if (success) {
-      toast.success("Signed in with Google!");
-    } else if (error) {
-      toast.error(error);
-      clearError();
-    }
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newOtp = otp.split("");
-    newOtp[index] = value;
-    setOtp(newOtp.join(""));
-    if (value && index < 5) {
-      otpInputsRef.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      otpInputsRef.current[index - 1]?.focus();
-    }
-  };
-
-  return (
-    <div className="relative min-h-[80vh] overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-saffron/5" />
-      <div className="absolute -left-32 -top-32 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-      <div className="absolute -bottom-32 -right-32 h-64 w-64 rounded-full bg-saffron/10 blur-3xl" />
-      
-      <div className="relative mx-auto max-w-md px-4 py-16 sm:px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25">
-            <Sparkles className="h-10 w-10 text-primary-foreground" />
-          </div>
-          <h1 className="mt-6 font-serif text-3xl font-bold bg-gradient-to-r from-primary to-terracotta bg-clip-text text-transparent">
-            Welcome to Rudraksh
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Sign in to access your account
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mt-8"
-        >
-          <div className="rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-6 shadow-xl shadow-black/5">
-            <AnimatePresence mode="wait">
-              {step === "phone" ? (
-                <motion.div
-                  key="phone"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="space-y-5"
-                >
-                  <div>
-                    <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
-                    <div className="mt-2 flex gap-2">
-                      <div className="flex h-12 items-center rounded-xl border border-input bg-muted/50 px-4 text-sm font-medium">
-                        🇮🇳 +91
-                      </div>
-                      <Input
-                        id="phone"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="Enter 10-digit number"
-                        className="h-12 flex-1 rounded-xl text-lg"
-                      />
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={handleSendOTP} 
-                    className="h-12 w-full rounded-xl text-base font-medium"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center gap-2">
-                        <motion.span
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
-                        />
-                        Sending OTP...
-                      </span>
-                    ) : (
-                      <>
-                        <Phone className="mr-2 h-4 w-4" />
-                        Send OTP
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-border" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    onClick={handleGoogleLogin}
-                    className="h-12 w-full rounded-xl text-base"
-                    disabled={isLoading}
-                  >
-                    <GoogleIcon />
-                    <span className="ml-2">Google</span>
-                  </Button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="otp"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-5"
-                >
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">
-                      Enter the 6-digit code sent to
-                    </p>
-                    <p className="mt-1 font-medium">+91 {phone}</p>
-                    <button
-                      onClick={() => setStep("phone")}
-                      className="mt-1 text-sm text-primary hover:underline"
-                    >
-                      Change number
-                    </button>
-                  </div>
-                  
-                  <div className="flex justify-center gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((index) => (
-                      <input
-                        key={index}
-                        ref={(el) => { otpInputsRef.current[index] = el; }}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={otp[index] || ""}
-                        onChange={(e) => handleOtpChange(index, e.target.value.replace(/\D/g, ""))}
-                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                        className="h-14 w-12 rounded-xl border border-input bg-background text-center text-xl font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                    ))}
-                  </div>
-
-                  <Button
-                    onClick={handleVerifyOTP}
-                    className="h-12 w-full rounded-xl text-base font-medium"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Verifying..." : "Verify OTP"}
-                  </Button>
-
-                  <button
-                    onClick={handleSendOTP}
-                    className="w-full text-center text-sm text-primary hover:underline"
-                  >
-                    Resend OTP
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          By continuing, you agree to our{" "}
-          <Link href="/terms" className="text-primary hover:underline">
-            Terms
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="text-primary hover:underline">
-            Privacy Policy
-          </Link>
-        </p>
-
-        <div id="recaptcha-container" ref={recaptchaRef} />
-      </div>
-    </div>
-  );
-}
-
-function PhoneVerificationModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { initRecaptcha, sendPhoneOTP, verifyPhoneOTP, updateProfile, error, clearError, isConfigured } = useAuth();
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [isLoading, setIsLoading] = useState(false);
-  const recaptchaRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isOpen && isConfigured && recaptchaRef.current) {
-      initRecaptcha("modal-recaptcha");
-    }
-  }, [isOpen, initRecaptcha, isConfigured]);
-
-  const handleSendOTP = async () => {
-    if (phone.length !== 10) {
-      toast.error("Please enter a valid 10-digit phone number");
-      return;
-    }
-    setIsLoading(true);
-    const success = await sendPhoneOTP(phone);
-    setIsLoading(false);
-    if (success) {
-      setStep("otp");
-      toast.success("OTP sent!");
-    } else if (error) {
-      toast.error(error);
+      toast.success("OTP sent to +91 " + phone);
+    } else {
+      toast.error(error || "Could not send the OTP");
       clearError();
     }
   };
 
   const handleVerify = async () => {
     if (otp.length !== 6) {
-      toast.error("Enter valid 6-digit OTP");
+      toast.error("Enter the 6-digit code");
       return;
     }
-    setIsLoading(true);
-    const success = await verifyPhoneOTP(otp);
-    if (success) {
-      await updateProfile({ phone: `+91${phone}`, phoneVerified: true });
-      toast.success("Phone verified!");
-      onClose();
-    } else if (error) {
-      toast.error(error);
+    setBusy("verify");
+    const ok = await verifyPhoneOTP(otp);
+    setBusy(null);
+    if (ok) toast.success("Signed in successfully");
+    else {
+      toast.error(error || "That code did not work");
       clearError();
     }
-    setIsLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setBusy("google");
+    const ok = await loginWithGoogle();
+    setBusy(null);
+    if (ok) toast.success("Signed in with Google");
+    else {
+      toast.error(error || "Google sign-in failed");
+      clearError();
+    }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <div className="relative min-h-[80vh] overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-saffron/5" />
+      <div className="relative mx-auto max-w-md px-4 py-16 sm:px-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25">
+            <Sparkles className="h-10 w-10 text-primary-foreground" />
+          </div>
+          <h1 className="mt-6 font-serif text-3xl font-bold">Welcome to Rudraksh</h1>
+          <p className="mt-2 text-muted-foreground">Sign in to track orders and save addresses</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mt-8 rounded-2xl border border-border bg-card/80 p-6 shadow-xl shadow-black/5 backdrop-blur-sm"
+        >
+          <AnimatePresence mode="wait">
+            {mode === "email" ? (
+              <motion.div
+                key="email"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="space-y-4"
+              >
+                <SignInForm
+                  title={creating ? "Create your account" : "Sign in"}
+                  subtitle={
+                    creating
+                      ? "One account for orders, addresses and saved pieces."
+                      : "Welcome back — your orders and addresses are waiting."
+                  }
+                  onSubmit={handleEmail}
+                  onGoogle={handleGoogle}
+                  loading={authLoading || busy === "google"}
+                  error={authError}
+                  footer={
+                    <div className="space-y-3 text-sm">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreating((prev) => !prev);
+                          setAuthError(null);
+                        }}
+                        className="w-full text-center text-primary hover:underline"
+                      >
+                        {creating ? "Already have an account? Sign in" : "New here? Create an account"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMode("phone")}
+                        className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Prefer a mobile OTP? Use your number instead
+                      </button>
+                    </div>
+                  }
+                />
+              </motion.div>
+            ) : step === "phone" ? (
+              <motion.div
+                key="phone"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-5"
+              >
+                <div>
+                  <Label htmlFor="phone" className="text-sm font-medium">Mobile Number</Label>
+                  <div className="mt-2 flex gap-2">
+                    <div className="flex h-12 items-center rounded-xl border border-input bg-muted/50 px-4 text-sm font-medium">
+                      🇮🇳 +91
+                    </div>
+                    <Input
+                      id="phone"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      placeholder="10-digit mobile number"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      className="h-12 flex-1 rounded-xl text-lg"
+                    />
+                  </div>
+                </div>
+
+                <div id={recaptchaHostId} className="flex justify-center" />
+
+                <button
+                  type="button"
+                  onClick={() => setMode("email")}
+                  className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Use email and password instead
+                </button>
+
+                <Button onClick={handleSendOTP} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
+                  {busy === "otp" ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Sending OTP…
+                    </span>
+                  ) : (
+                    <><Phone className="mr-2 h-4 w-4" /> Send OTP</>
+                  )}
+                </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                  </div>
+                </div>
+
+                <Button variant="outline" onClick={handleGoogle} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
+                  {busy === "google" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
+                  <span className="ml-2">Google</span>
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="otp"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-5"
+              >
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to</p>
+                  <p className="mt-1 font-medium">+91 {phone}</p>
+                  <button onClick={() => setStep("phone")} className="mt-1 text-sm text-primary hover:underline">
+                    Change number
+                  </button>
+                </div>
+
+                <Input
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="••••••"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="h-14 text-center text-2xl tracking-[0.5em]"
+                />
+
+                <Button onClick={handleVerify} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
+                  {busy === "verify" ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…</>
+                  ) : (
+                    "Verify & Sign In"
+                  )}
+                </Button>
+
+                <button onClick={handleSendOTP} className="w-full text-center text-sm text-primary hover:underline">
+                  Resend OTP
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          By continuing, you agree to our{" "}
+          <Link href="/terms" className="text-primary hover:underline">Terms</Link> and{" "}
+          <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PhoneVerificationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { initRecaptcha, sendPhoneOTP, verifyPhoneOTP, updateProfile, error, clearError, isConfigured } =
+    useAuth();
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [busy, setBusy] = useState(false);
+  const hostId = "modal-recaptcha";
+
+  useEffect(() => {
+    if (open && isConfigured) initRecaptcha(hostId);
+  }, [open, initRecaptcha, isConfigured]);
+
+  const reset = () => {
+    setPhone("");
+    setOtp("");
+    setStep("phone");
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            Verify Phone Number
+            <Shield className="h-5 w-5 text-primary" /> Verify your mobile number
           </DialogTitle>
         </DialogHeader>
+
         <div className="space-y-4 py-4">
           {step === "phone" ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Verify your phone number once for order updates and notifications.
+                Add a verified mobile number for order updates and delivery calls.
               </p>
               <div className="flex gap-2">
                 <div className="flex h-10 items-center rounded-md border bg-muted px-3 text-sm">+91</div>
                 <Input
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="10-digit number"
+                  inputMode="numeric"
                   className="flex-1"
                 />
               </div>
-              <Button onClick={handleSendOTP} className="w-full" disabled={isLoading}>
-                {isLoading ? "Sending..." : "Send OTP"}
+              <div id={hostId} className="flex justify-center" />
+              <Button
+                onClick={async () => {
+                  if (phone.length !== 10) return toast.error("Enter a valid 10-digit number");
+                  setBusy(true);
+                  const ok = await sendPhoneOTP(phone);
+                  setBusy(false);
+                  if (ok) {
+                    setStep("otp");
+                    toast.success("OTP sent");
+                  } else {
+                    toast.error(error || "Could not send OTP");
+                    clearError();
+                  }
+                }}
+                className="w-full"
+                disabled={busy}
+              >
+                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</> : "Send OTP"}
               </Button>
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground text-center">
-                Enter OTP sent to +91 {phone}
-              </p>
+              <p className="text-center text-sm text-muted-foreground">Enter the code sent to +91 {phone}</p>
               <Input
                 value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="6-digit OTP"
-                className="text-center text-lg tracking-widest"
+                inputMode="numeric"
+                className="text-center text-lg tracking-[0.4em]"
               />
-              <Button onClick={handleVerify} className="w-full" disabled={isLoading}>
-                {isLoading ? "Verifying..." : "Verify"}
+              <Button
+                onClick={async () => {
+                  if (otp.length !== 6) return toast.error("Enter the 6-digit code");
+                  setBusy(true);
+                  const ok = await verifyPhoneOTP(otp);
+                  if (ok) {
+                    await updateProfile({ phone: `+91${phone}`, phoneVerified: true });
+                    toast.success("Mobile number verified");
+                    reset();
+                    onClose();
+                  } else {
+                    toast.error(error || "Verification failed");
+                    clearError();
+                  }
+                  setBusy(false);
+                }}
+                className="w-full"
+                disabled={busy}
+              >
+                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…</> : "Verify"}
               </Button>
             </>
           )}
         </div>
-        <div id="modal-recaptcha" ref={recaptchaRef} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function ProfileContent() {
-  const { user, profile, logout, updateProfile, isConfigured } = useAuth();
-  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [name, setName] = useState(profile?.displayName || "");
-  const [email, setEmail] = useState(profile?.email || "");
-  const [showAddAddress, setShowAddAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState<Partial<Address>>({});
+function OrdersTab() {
+  const { user } = useAuth();
+  const [orders, setOrders] = useState<Order[] | null>(null);
 
   useEffect(() => {
-    if (profile) {
-      setName(profile.displayName || "");
-      setEmail(profile.email || "");
-    }
-  }, [profile]);
+    if (!user) return;
+    return subscribeUserOrders(user.uid, setOrders);
+  }, [user]);
 
-  const handleSaveProfile = async () => {
-    await updateProfile({ displayName: name, email });
-    setEditingProfile(false);
-    toast.success("Profile updated!");
-  };
+  if (!user) return null;
 
-  const handleAddAddress = async () => {
-    if (!newAddress.fullName || !newAddress.phone || !newAddress.address || !newAddress.city || !newAddress.state || !newAddress.pincode) {
-      toast.error("Please fill all fields");
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 font-serif text-lg font-semibold">
+          <Package className="h-5 w-5 text-primary" /> My Orders
+        </h2>
+        <span className="text-sm text-muted-foreground">
+          {orders ? `${orders.length} order${orders.length === 1 ? "" : "s"}` : ""}
+        </span>
+      </div>
+
+      {orders === null ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="flex flex-col items-center py-12 text-center">
+          <div className="rounded-full bg-muted p-6">
+            <Package className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <p className="mt-4 font-medium">No orders yet</p>
+          <p className="text-sm text-muted-foreground">Orders placed with this account appear here.</p>
+          <Button asChild className="mt-6">
+            <Link href="/products">Start Shopping</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {orders.map((order) => (
+            <div key={order.id} className="rounded-lg border border-border p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-mono text-sm font-medium">{order.order_number}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${statusClasses[order.order_status] ?? "bg-muted"}`}>
+                      {order.order_status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {order.items?.length ?? 0} item(s) • {order.payment_method.toUpperCase()} •{" "}
+                    {new Date(order.created_at).toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {order.address}, {order.city}, {order.state} — {order.pincode}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-semibold">{formatPrice(order.total)}</p>
+                  <Button asChild variant="ghost" size="sm" className="mt-1 text-xs">
+                    <Link href={`/track-order?order=${order.order_number}`}>Track order</Link>
+                  </Button>
+                </div>
+              </div>
+
+              {order.items?.length > 0 && (
+                <div className="mt-3 space-y-1 border-t border-border pt-3">
+                  {order.items.map((item, index) => (
+                    <div key={`${item.productId}-${index}`} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {item.name} ({item.size}{item.color ? `, ${item.color}` : ""}) × {item.quantity}
+                      </span>
+                      <span>{formatPrice(item.price * item.quantity)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WishlistTab() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const { ids: wishlist } = useWishlist();
+
+  useEffect(() => subscribeProducts(setProducts), []);
+
+  const saved = useMemo(() => products.filter((product) => wishlist.includes(product.id)), [products, wishlist]);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <h2 className="mb-6 flex items-center gap-2 font-serif text-lg font-semibold">
+        <Heart className="h-5 w-5 text-primary" /> My Wishlist
+      </h2>
+
+      {saved.length === 0 ? (
+        <div className="flex flex-col items-center py-12 text-center">
+          <div className="rounded-full bg-muted p-6">
+            <Heart className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <p className="mt-4 font-medium">Your wishlist is empty</p>
+          <p className="text-sm text-muted-foreground">Tap the heart on any product to save it here.</p>
+          <Button asChild className="mt-6">
+            <Link href="/products">Browse Products</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {saved.map((product) => (
+            <Link
+              key={product.id}
+              href={`/products/${product.slug}`}
+              className="flex gap-3 rounded-xl border border-border p-3 hover:border-primary/30"
+            >
+              <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+                {product.images?.[0] && (
+                  <Image src={product.images[0]} alt={product.name} fill className="object-cover" sizes="64px" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium line-clamp-2">{product.name}</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {formatPrice(product.sale_price ?? product.price)}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddressesTab() {
+  const { profile, updateProfile } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Partial<Address>>({});
+  const addresses = profile?.addresses ?? [];
+
+  const save = async () => {
+    const address = normalizeAddress(draft);
+    if (!address.fullName || !address.phone || !address.address || !address.city || !address.state || !address.pincode) {
+      toast.error("Please fill in every field");
       return;
     }
-    const addresses = profile?.addresses || [];
-    const address: Address = {
-      ...newAddress as Address,
-      id: Date.now().toString(),
-      isDefault: addresses.length === 0,
-    };
-    await updateProfile({ addresses: [...addresses, address] });
-    setShowAddAddress(false);
-    setNewAddress({});
-    toast.success("Address added!");
+    if (address.phone.replace(/\D/g, "").length !== 10) {
+      toast.error("Enter a valid 10-digit phone number");
+      return;
+    }
+    const next = [...addresses, { ...address, isDefault: addresses.length === 0 }];
+    const ok = await updateProfile({ addresses: next });
+    if (ok) {
+      toast.success("Address saved");
+      setDraft({});
+      setOpen(false);
+    } else {
+      toast.error("Could not save the address");
+    }
   };
 
-  const handleDeleteAddress = async (id: string) => {
-    const addresses = (profile?.addresses || []).filter((a) => a.id !== id);
-    await updateProfile({ addresses });
-    toast.success("Address removed");
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 font-serif text-lg font-semibold">
+          <MapPin className="h-5 w-5 text-primary" /> Saved Addresses
+        </h2>
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Add New
+        </Button>
+      </div>
+
+      {addresses.length === 0 ? (
+        <div className="flex flex-col items-center py-12 text-center">
+          <div className="rounded-full bg-muted p-6">
+            <MapPin className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <p className="mt-4 font-medium">No addresses saved</p>
+          <p className="text-sm text-muted-foreground">Save an address for faster checkout.</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {addresses.map((address) => (
+            <div key={address.id} className="relative rounded-xl border border-border p-4">
+              {address.isDefault && (
+                <span className="absolute right-2 top-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                  Default
+                </span>
+              )}
+              <p className="font-medium">{address.fullName}</p>
+              <p className="text-sm text-muted-foreground">{address.phone}</p>
+              <p className="mt-2 text-sm">{address.address}</p>
+              <p className="text-sm">{address.city}, {address.state} — {address.pincode}</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 text-destructive hover:text-destructive"
+                onClick={async () => {
+                  const ok = await updateProfile({ addresses: addresses.filter((item) => item.id !== address.id) });
+                  if (ok) toast.success("Address removed");
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Remove
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a new address</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Full Name</Label>
+                <Input value={draft.fullName ?? ""} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input
+                  value={draft.phone ?? ""}
+                  onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                  inputMode="numeric"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Address</Label>
+              <Input value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} className="mt-1" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <Label>City</Label>
+                <Input value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label>State</Label>
+                <Input value={draft.state ?? ""} onChange={(e) => setDraft({ ...draft, state: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label>Pincode</Label>
+                <Input
+                  value={draft.pincode ?? ""}
+                  onChange={(e) => setDraft({ ...draft, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                  inputMode="numeric"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <Button onClick={save} className="w-full">Save Address</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ActivityFeed({ uid }: { uid: string }) {
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeActivity(uid, (rows) => {
+      setEvents(rows);
+      setReady(true);
+    });
+    return unsubscribe;
+  }, [uid]);
+
+  const icons: Record<string, LucideIcon> = {
+    signin: Shield,
+    order: Package,
+    wishlist: Heart,
+    profile: User,
   };
 
-  if (!isConfigured) {
-    return <FirebaseNotConfigured />;
+  if (!ready) return <PageSpinner label="Loading activity" />;
+
+  if (events.length === 0) {
+    return (
+      <AccountSection title="Recent activity" description="Sign-ins, orders and saved pieces show up here.">
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Nothing yet — your first order or saved piece will appear here.
+        </p>
+      </AccountSection>
+    );
+  }
+
+  return (
+    <AccountSection title="Recent activity" description="Everything you have done on this account, newest first.">
+      <div className="divide-y divide-border">
+        {events.slice(0, 25).map((event) => (
+          <ActivityRow
+            key={event.id}
+            icon={icons[event.type] ?? Sparkles}
+            title={event.label}
+            meta={event.meta ? `${event.meta} · ${new Date(event.at).toLocaleString("en-IN")}` : new Date(event.at).toLocaleString("en-IN")}
+            href={event.href}
+          />
+        ))}
+      </div>
+    </AccountSection>
+  );
+}
+
+function AccountContent() {
+  const { user, profile, loading, logout, updateProfile, isConfigured } = useAuth();
+  const store = useStore();
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    setName(profile?.displayName ?? "");
+    setEmail(profile?.email ?? "");
+  }, [profile?.displayName, profile?.email]);
+
+  if (!isConfigured) return <FirebaseNotConfigured />;
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   if (!user) return <LoginScreen />;
 
+  const displayName = profile?.displayName || user.displayName || "Welcome";
+  const initial = (displayName || user.email || "U")[0]?.toUpperCase() ?? "U";
+
   return (
     <div className="relative min-h-screen">
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-      
       <div className="relative mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex items-start justify-between rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
+        <div className="mb-8 rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               {profile?.photoURL ? (
                 <Image
@@ -485,98 +833,69 @@ function ProfileContent() {
                   alt="Profile"
                   width={72}
                   height={72}
-                  className="rounded-full border-4 border-white/20"
+                  className="h-18 w-18 rounded-full border-4 border-white/20 object-cover"
                 />
               ) : (
-                <div className="flex h-18 w-18 items-center justify-center rounded-full bg-white/20 text-2xl font-bold">
-                  {(profile?.displayName || user.email || "U")[0].toUpperCase()}
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-2xl font-bold">
+                  {initial}
                 </div>
               )}
               <div>
-                <h1 className="font-serif text-2xl font-bold">
-                  {profile?.displayName || "Welcome!"}
-                </h1>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-primary-foreground/80">
-                  {profile?.phoneVerified && profile.phone && (
+                <h1 className="font-serif text-2xl font-bold">{displayName}</h1>
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-primary-foreground/80">
+                  {profile?.phoneVerified && profile?.phone && (
                     <span className="flex items-center gap-1">
-                      <CheckCircle2 className="h-4 w-4" />
-                      {profile.phone}
+                      <CheckCircle2 className="h-4 w-4" /> {profile.phone}
                     </span>
                   )}
-                  {profile?.email && (
+                  {(profile?.email || user.email) && (
                     <span className="flex items-center gap-1">
-                      <Mail className="h-4 w-4" />
-                      {profile.email}
+                      <Mail className="h-4 w-4" /> {profile?.email || user.email}
                     </span>
                   )}
                 </div>
               </div>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={logout}
-              className="shrink-0"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
+            <Button variant="secondary" size="sm" onClick={logout}>
+              <LogOut className="mr-2 h-4 w-4" /> Logout
             </Button>
           </div>
+        </div>
 
-          {!profile?.phoneVerified && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mt-4 flex items-center justify-between rounded-xl border border-saffron/30 bg-saffron/10 p-4"
-            >
-              <div className="flex items-center gap-3">
-                <Shield className="h-5 w-5 text-saffron" />
-                <div>
-                  <p className="font-medium text-foreground">Verify your phone</p>
-                  <p className="text-sm text-muted-foreground">Get order updates via SMS</p>
-                </div>
+        {!profile?.phoneVerified && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-saffron/30 bg-saffron/10 p-4">
+            <div className="flex items-center gap-3">
+              <Shield className="h-5 w-5 text-saffron" />
+              <div>
+                <p className="font-medium">Verify your mobile number</p>
+                <p className="text-sm text-muted-foreground">Get delivery updates on SMS and WhatsApp</p>
               </div>
-              <Button onClick={() => setShowPhoneVerify(true)} size="sm">
-                Verify Now
-              </Button>
-            </motion.div>
-          )}
-        </motion.div>
+            </div>
+            <Button size="sm" onClick={() => setVerifyOpen(true)}>Verify Now</Button>
+          </div>
+        )}
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 rounded-xl bg-muted/50 p-1">
-            <TabsTrigger value="profile" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </TabsTrigger>
-            <TabsTrigger value="orders" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <Package className="mr-2 h-4 w-4" />
-              Orders
-            </TabsTrigger>
-            <TabsTrigger value="addresses" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <MapPin className="mr-2 h-4 w-4" />
-              Addresses
-            </TabsTrigger>
-            <TabsTrigger value="wishlist" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <Heart className="mr-2 h-4 w-4" />
-              Wishlist
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 gap-1 rounded-xl bg-muted/50 p-1 sm:grid-cols-5">
+            <TabsTrigger value="profile"><User className="mr-2 h-4 w-4" /> Profile</TabsTrigger>
+            <TabsTrigger value="orders"><Package className="mr-2 h-4 w-4" /> Orders</TabsTrigger>
+            <TabsTrigger value="addresses"><MapPin className="mr-2 h-4 w-4" /> Addresses</TabsTrigger>
+            <TabsTrigger value="wishlist"><Heart className="mr-2 h-4 w-4" /> Wishlist</TabsTrigger>
+            <TabsTrigger value="activity"><Sparkles className="mr-2 h-4 w-4" /> Activity</TabsTrigger>
           </TabsList>
 
+          <TabsContent value="activity">
+            <ActivityFeed uid={user.uid} />
+          </TabsContent>
+
           <TabsContent value="profile">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-border bg-card p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-6">
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 font-serif text-lg font-semibold">
-                  <User className="h-5 w-5 text-primary" />
-                  Personal Details
+                  <User className="h-5 w-5 text-primary" /> Personal Details
                 </h2>
-                <Button variant="ghost" size="sm" onClick={() => setEditingProfile(!editingProfile)}>
-                  <Edit2 className="mr-2 h-4 w-4" />
-                  {editingProfile ? "Cancel" : "Edit"}
+                <Button variant="ghost" size="sm" onClick={() => setEditing(!editing)}>
+                  <Edit2 className="mr-2 h-4 w-4" /> {editing ? "Cancel" : "Edit"}
                 </Button>
               </div>
 
@@ -584,18 +903,18 @@ function ProfileContent() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Full Name</Label>
-                    {editingProfile ? (
-                      <Input value={name} onChange={(e) => setName(e.target.value)} />
+                    {editing ? (
+                      <Input value={name} onChange={(event) => setName(event.target.value)} />
                     ) : (
                       <p className="font-medium">{profile?.displayName || "Not set"}</p>
                     )}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Email</Label>
-                    {editingProfile ? (
-                      <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    {editing ? (
+                      <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
                     ) : (
-                      <p className="font-medium">{profile?.email || "Not set"}</p>
+                      <p className="font-medium">{profile?.email || user.email || "Not set"}</p>
                     )}
                   </div>
                 </div>
@@ -603,133 +922,50 @@ function ProfileContent() {
                 <div className="rounded-xl bg-muted/50 p-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label className="text-muted-foreground">Phone Number</Label>
+                      <Label className="text-muted-foreground">Mobile Number</Label>
                       <p className="flex items-center gap-2 font-medium">
                         {profile?.phone || "Not verified"}
                         {profile?.phoneVerified && (
                           <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Verified
+                            <CheckCircle2 className="h-3 w-3" /> Verified
                           </span>
                         )}
                       </p>
                     </div>
                     {!profile?.phoneVerified && (
-                      <Button variant="outline" size="sm" onClick={() => setShowPhoneVerify(true)}>
-                        Verify
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setVerifyOpen(true)}>Verify</Button>
                     )}
                   </div>
                 </div>
 
-                {editingProfile && (
-                  <Button onClick={handleSaveProfile} className="w-full">
+                {editing && (
+                  <Button
+                    className="w-full"
+                    onClick={async () => {
+                      const ok = await updateProfile({ displayName: name.trim(), email: email.trim() });
+                      if (ok) {
+                        void logActivity(user.uid, {
+                          type: "profile",
+                          label: "Profile details updated",
+                          href: "/account",
+                        });
+                        toast.success("Profile updated");
+                        setEditing(false);
+                      } else {
+                        toast.error("Could not update the profile");
+                      }
+                    }}
+                  >
                     Save Changes
                   </Button>
                 )}
               </div>
-            </motion.div>
+            </div>
           </TabsContent>
 
-          <TabsContent value="orders">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-border bg-card p-6 shadow-sm"
-            >
-              <h2 className="flex items-center gap-2 font-serif text-lg font-semibold mb-6">
-                <Package className="h-5 w-5 text-primary" />
-                My Orders
-              </h2>
-              <div className="flex flex-col items-center py-12 text-center">
-                <div className="rounded-full bg-muted p-6">
-                  <Package className="h-12 w-12 text-muted-foreground" />
-                </div>
-                <p className="mt-4 font-medium">No orders yet</p>
-                <p className="text-sm text-muted-foreground">Your orders will appear here</p>
-                <Button asChild className="mt-6">
-                  <Link href="/products">Start Shopping</Link>
-                </Button>
-              </div>
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="addresses">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-border bg-card p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="flex items-center gap-2 font-serif text-lg font-semibold">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  Saved Addresses
-                </h2>
-                <Button size="sm" onClick={() => setShowAddAddress(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add New
-                </Button>
-              </div>
-
-              {(profile?.addresses?.length || 0) > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {profile?.addresses?.map((addr) => (
-                    <div key={addr.id} className="relative rounded-xl border border-border p-4">
-                      {addr.isDefault && (
-                        <span className="absolute right-2 top-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                          Default
-                        </span>
-                      )}
-                      <p className="font-medium">{addr.fullName}</p>
-                      <p className="text-sm text-muted-foreground">{addr.phone}</p>
-                      <p className="mt-2 text-sm">{addr.address}</p>
-                      <p className="text-sm">{addr.city}, {addr.state} - {addr.pincode}</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 text-destructive"
-                        onClick={() => handleDeleteAddress(addr.id)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center py-12 text-center">
-                  <div className="rounded-full bg-muted p-6">
-                    <MapPin className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <p className="mt-4 font-medium">No addresses saved</p>
-                  <p className="text-sm text-muted-foreground">Add an address for faster checkout</p>
-                </div>
-              )}
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="wishlist">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-border bg-card p-6 shadow-sm"
-            >
-              <h2 className="flex items-center gap-2 font-serif text-lg font-semibold mb-6">
-                <Heart className="h-5 w-5 text-primary" />
-                My Wishlist
-              </h2>
-              <div className="flex flex-col items-center py-12 text-center">
-                <div className="rounded-full bg-muted p-6">
-                  <Heart className="h-12 w-12 text-muted-foreground" />
-                </div>
-                <p className="mt-4 font-medium">Wishlist is empty</p>
-                <p className="text-sm text-muted-foreground">Save items you love</p>
-                <Button asChild className="mt-6">
-                  <Link href="/products">Browse Products</Link>
-                </Button>
-              </div>
-            </motion.div>
-          </TabsContent>
+          <TabsContent value="orders"><OrdersTab /></TabsContent>
+          <TabsContent value="addresses"><AddressesTab /></TabsContent>
+          <TabsContent value="wishlist"><WishlistTab /></TabsContent>
         </Tabs>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -738,9 +974,7 @@ function ProfileContent() {
             className="group flex items-center justify-between rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
           >
             <div className="flex items-center gap-4">
-              <div className="rounded-xl bg-primary/10 p-3">
-                <Package className="h-6 w-6 text-primary" />
-              </div>
+              <div className="rounded-xl bg-primary/10 p-3"><Package className="h-6 w-6 text-primary" /></div>
               <div>
                 <span className="font-medium">Track Order</span>
                 <p className="text-sm text-muted-foreground">Check delivery status</p>
@@ -748,106 +982,34 @@ function ProfileContent() {
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
           </Link>
-          <a
-            href="https://wa.me/919876543210"
-            target="_blank"
-            rel="noopener noreferrer"
+
+          <Link
+            href="/contact"
             className="group flex items-center justify-between rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
           >
             <div className="flex items-center gap-4">
-              <div className="rounded-xl bg-green-500/10 p-3">
-                <Phone className="h-6 w-6 text-green-600" />
-              </div>
+              <div className="rounded-xl bg-green-500/10 p-3"><Phone className="h-6 w-6 text-green-600" /></div>
               <div>
                 <span className="font-medium">Need Help?</span>
-                <p className="text-sm text-muted-foreground">Chat on WhatsApp</p>
+                <p className="text-sm text-muted-foreground">Contact {store.name}</p>
               </div>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
-          </a>
+          </Link>
         </div>
       </div>
 
-      <PhoneVerificationModal isOpen={showPhoneVerify} onClose={() => setShowPhoneVerify(false)} />
-
-      <Dialog open={showAddAddress} onOpenChange={setShowAddAddress}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Address</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Full Name</Label>
-                <Input
-                  value={newAddress.fullName || ""}
-                  onChange={(e) => setNewAddress({ ...newAddress, fullName: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input
-                  value={newAddress.phone || ""}
-                  onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Address</Label>
-              <Input
-                value={newAddress.address || ""}
-                onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-                className="mt-1"
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <Label>City</Label>
-                <Input
-                  value={newAddress.city || ""}
-                  onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label>State</Label>
-                <Input
-                  value={newAddress.state || ""}
-                  onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label>Pincode</Label>
-                <Input
-                  value={newAddress.pincode || ""}
-                  onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <Button onClick={handleAddAddress} className="w-full">Save Address</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PhoneVerificationModal open={verifyOpen} onClose={() => setVerifyOpen(false)} />
     </div>
   );
 }
 
 export default function AccountPage() {
   return (
-    <CartProvider>
-      <AuthProvider>
-        <div className="min-h-screen bg-background">
-          <Header />
-          <main>
-            <ProfileContent />
-          </main>
-          <Footer />
-        </div>
-      </AuthProvider>
-    </CartProvider>
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main><AccountContent /></main>
+      <Footer />
+    </div>
   );
 }

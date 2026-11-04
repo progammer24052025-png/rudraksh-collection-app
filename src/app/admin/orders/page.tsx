@@ -1,45 +1,67 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Loader2, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatPrice, type Order } from "@/lib/store-data";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
 import { toast } from "sonner";
-
-const STATUS_OPTIONS = ["placed", "confirmed", "shipped", "delivered", "cancelled"];
+import { formatPrice, subscribeOrders, updateOrderStatus } from "@/lib/firebase";
+import { ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, statusLabel } from "@/lib/orders";
+import type { Order, OrderStatus, PaymentStatus } from "@/lib/types";
 
 export default function AdminOrdersPage() {
-  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const loadOrders = useCallback(async () => {
-    const url = filter === "all" ? "/api/admin/orders" : `/api/admin/orders?status=${filter}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      router.replace("/admin");
-      return;
-    }
-    const data = await res.json();
-    setOrders(data.orders || []);
-    setLoading(false);
-  }, [filter, router]);
-
-  useEffect(() => { loadOrders(); }, [loadOrders]);
-
-  const handleStatusChange = async (orderId: string, status: string) => {
-    const res = await fetch("/api/admin/orders", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: orderId, order_status: status }),
+  useEffect(() => {
+    const unsubscribe = subscribeOrders((list) => {
+      setOrders(list);
+      setLoading(false);
     });
-    if (res.ok) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status as Order["order_status"] } : o));
-      toast.success(`Order marked as ${status}`);
-    } else {
-      toast.error("Failed to update order");
+    return () => unsubscribe();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return orders.filter((order) => {
+      if (filter !== "all" && order.order_status !== filter) return false;
+      if (!term) return true;
+      return (
+        order.order_number.toLowerCase().includes(term) ||
+        order.customer_name.toLowerCase().includes(term) ||
+        order.phone.includes(term)
+      );
+    });
+  }, [orders, filter, search]);
+
+  const changeStatus = async (order: Order, status: OrderStatus) => {
+    setBusyId(order.id);
+    try {
+      await updateOrderStatus(order.id, status);
+      toast.success(`${order.order_number} → ${status}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not update the order status");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const changePayment = async (order: Order, payment_status: PaymentStatus) => {
+    setBusyId(order.id);
+    try {
+      await updateOrderStatus(order.id, order.order_status, { payment_status });
+      toast.success(`Payment marked ${payment_status}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not update the payment status");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -47,91 +69,121 @@ export default function AdminOrdersPage() {
     <div className="min-h-screen">
       <AdminNav />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="font-serif text-2xl font-medium">Orders</h1>
-            <p className="text-sm text-muted-foreground">{orders.length} orders</p>
+            <p className="text-sm text-muted-foreground">
+              {loading ? "Connecting…" : `${filtered.length} of ${orders.length} orders`} · live
+            </p>
           </div>
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Filter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Orders</SelectItem>
-              {STATUS_OPTIONS.map(s => (
-                <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Order no, name, phone"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="w-56 pl-9"
+              />
+            </div>
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Filter" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All orders</SelectItem>
+                {ORDER_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
-            ))}
+          <div className="flex justify-center py-20 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
           </div>
-        ) : orders.length > 0 ? (
+        ) : filtered.length === 0 ? (
+          <div className="py-20 text-center text-muted-foreground">
+            <RefreshCw className="mx-auto h-10 w-10" />
+            <p className="mt-3 text-sm">No orders match this view yet.</p>
+          </div>
+        ) : (
           <div className="space-y-4">
-            {orders.map(order => (
+            {filtered.map((order) => (
               <div key={order.id} className="rounded-lg border border-border bg-card p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-medium">{order.order_number}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${
-                        order.payment_status === "paid" ? "bg-sage/10 text-sage" : "bg-muted text-muted-foreground"
-                      }`}>
-                        {order.payment_status}
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${statusLabel(order.order_status).className}`}>
+                        {statusLabel(order.order_status).label}
                       </span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${paymentLabel(order.payment_status).className}`}>
+                        {paymentLabel(order.payment_status).label}
+                      </span>
+                      {busyId === order.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {order.customer_name} • {order.phone}
-                    </p>
+                    <p className="mt-1 text-sm">{order.customer_name} • {order.phone}</p>
+                    {order.email && <p className="text-xs text-muted-foreground">{order.email}</p>}
                     <p className="text-xs text-muted-foreground">
-                      {order.address}, {order.city}, {order.state} - {order.pincode}
+                      {order.address}, {order.city}, {order.state} — {order.pincode}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {Array.isArray(order.items) ? order.items.length : 0} item(s) • {order.payment_method.toUpperCase()}
+                      {new Date(order.created_at).toLocaleString("en-IN")} · {order.payment_method.toUpperCase()}
                     </p>
+                    {order.notes && (
+                      <p className="mt-2 rounded bg-muted px-2 py-1 text-xs">Note: {order.notes}</p>
+                    )}
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-lg font-semibold">{formatPrice(order.total)}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <Select value={order.order_status} onValueChange={(v) => handleStatusChange(order.id, v)}>
-                      <SelectTrigger className="w-36 capitalize">
-                        <SelectValue />
-                      </SelectTrigger>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="mr-2 text-lg font-semibold">{formatPrice(order.total)}</p>
+                    <Select value={order.order_status} onValueChange={(value) => changeStatus(order, value as OrderStatus)}>
+                      <SelectTrigger className="w-36 capitalize"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {STATUS_OPTIONS.map(s => (
-                          <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                        {ORDER_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={order.payment_status} onValueChange={(value) => changePayment(order, value as PaymentStatus)}>
+                      <SelectTrigger className="w-32 capitalize"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PAYMENT_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+
                 {Array.isArray(order.items) && order.items.length > 0 && (
-                  <div className="mt-3 border-t border-border pt-3">
-                    {order.items.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between py-1 text-sm">
+                  <div className="mt-3 space-y-1 border-t border-border pt-3">
+                    {order.items.map((item, index) => (
+                      <div key={`${item.productId}-${index}`} className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
                           {item.name} ({item.size}{item.color ? `, ${item.color}` : ""}) × {item.quantity}
                         </span>
                         <span>{formatPrice(item.price * item.quantity)}</span>
                       </div>
                     ))}
+                    <div className="flex justify-between border-t border-border pt-2 text-sm">
+                      <span className="text-muted-foreground">Shipping</span>
+                      <span>{order.shipping === 0 ? "Free" : formatPrice(order.shipping)}</span>
+                    </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
-        ) : (
-          <div className="py-20 text-center text-muted-foreground">
-            No orders found
-          </div>
         )}
+
+        <div className="mt-6 flex justify-end">
+          <Button asChild variant="outline" size="sm">
+            <a href="/admin/orders">Refresh</a>
+          </Button>
+        </div>
       </main>
     </div>
   );

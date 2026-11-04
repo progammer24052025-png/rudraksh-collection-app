@@ -169,3 +169,52 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Conversion-kit primitives (Phase 1)
+   Every component below is skinned with our own tokens — no
+   blue, no dark surfaces, no red accents from the references.
+   ───────────────────────────────────────────────────────────── */
+
+@keyframes kit-dot-pulse {
+  0%, 100% { opacity: 0.18; transform: scale(0.72); }
+  40%      { opacity: 1;    transform: scale(1); }
+}
+
+.kit-spinner-dot {
+  animation: kit-dot-pulse 1.05s ease-in-out infinite;
+}
+
+/* Ticket notches for the tear-off coupon */
+.kit-ticket {
+  --notch: 9px;
+  mask-image:
+    radial-gradient(circle at 0 50%, transparent var(--notch), black calc(var(--notch) + 0.5px)),
+    radial-gradient(circle at 100% 50%, transparent var(--notch), black calc(var(--notch) + 0.5px));
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+/* Hanging rail in the product gallery */
+.kit-rail {
+  background: linear-gradient(180deg, #cfc6b8 0%, #a89e8f 45%, #cfc6b8 100%);
+  box-shadow: 0 2px 6px rgba(28, 25, 23, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.kit-hanger {
+  background: linear-gradient(180deg, #b8ae9e 0%, #8d8577 100%);
+}
+
+/* Peel-reveal cover */
+.kit-peel-cover {
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms ease;
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-spinner-dot,
+  .kit-peel-cover {
+    animation: none !important;
+    transition: none !important;
+  }
+}

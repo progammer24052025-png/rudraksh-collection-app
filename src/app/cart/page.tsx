@@ -7,23 +7,22 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
-import { CartProvider, useCart } from "@/lib/cart-context";
-import { formatPrice } from "@/lib/store-data";
-import { storeConfig } from "@/lib/config";
+import { useCart } from "@/lib/cart-context";
+import { fetchProducts, formatPrice } from "@/lib/store-data";
+import { useStore } from "@/lib/store-context";
 import { useEffect } from "react";
 
 function CartContent() {
+  const storeConfig = useStore();
   const { items, updateQuantity, removeItem, getCartTotal, getProduct, setProducts, isHydrated } = useCart();
   const cartTotal = getCartTotal();
   const shipping = cartTotal >= storeConfig.freeShippingThreshold ? 0 : storeConfig.shippingFee;
   const grandTotal = cartTotal + shipping;
 
-  // Ensure products are loaded for cart display
+  // Ensure products are loaded for cart display (Realtime Database).
   useEffect(() => {
     if (items.length > 0) {
-      fetch("/api/products?limit=100").then(r => r.json()).then(r => {
-        if (r.products) setProducts(r.products);
-      }).catch(() => {});
+      fetchProducts().then(r => setProducts(r.products)).catch(() => {});
     }
   }, [items.length, setProducts]);
 
@@ -182,7 +181,7 @@ function CartContent() {
 
 export default function CartPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
@@ -190,6 +189,6 @@ export default function CartPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

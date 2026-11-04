@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { CartProvider } from "@/lib/cart-context";
 import { collections } from "@/lib/config";
 import { motion } from "framer-motion";
 
@@ -19,7 +18,7 @@ const IMAGES: Record<string, string> = {
 
 export default function CollectionsPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -63,6 +62,6 @@ export default function CollectionsPage() {
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }

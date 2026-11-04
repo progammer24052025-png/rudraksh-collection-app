@@ -1,40 +1,43 @@
 import type { MetadataRoute } from "next";
-import { brands, collections } from "@/lib/config";
+import { brands, collections, siteUrl } from "@/lib/config";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://rudrakshcollection.in"; // TODO: update with actual domain
+  const now = new Date();
 
-  const staticPages = [
-    "",
-    "/products",
-    "/collections",
-    "/brands",
-    "/story",
-    "/visit",
-    "/shipping",
-    "/returns",
-    "/privacy",
-    "/terms",
-  ].map(path => ({
-    url: `${baseUrl}${path}`,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: path === "" ? 1 : 0.7,
-  }));
+  const staticPaths: Array<[string, number]> = [
+    ["", 1],
+    ["/products", 0.9],
+    ["/collections", 0.8],
+    ["/brands", 0.8],
+    ["/story", 0.6],
+    ["/visit", 0.6],
+    ["/contact", 0.6],
+    ["/faq", 0.6],
+    ["/track-order", 0.5],
+    ["/shipping", 0.4],
+    ["/returns", 0.4],
+    ["/privacy", 0.3],
+    ["/terms", 0.3],
+  ];
 
-  const brandPages = brands.map(brand => ({
-    url: `${baseUrl}/brands/${brand.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
-
-  const collectionPages = collections.map(col => ({
-    url: `${baseUrl}/products?category=${col.slug}`,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
-
-  return [...staticPages, ...brandPages, ...collectionPages];
+  return [
+    ...staticPaths.map(([path, priority]) => ({
+      url: `${siteUrl}${path}`,
+      lastModified: now,
+      changeFrequency: (path === "" ? "daily" : "weekly") as "daily" | "weekly",
+      priority,
+    })),
+    ...brands.map((brand) => ({
+      url: `${siteUrl}/brands/${brand.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+    ...collections.map((collection) => ({
+      url: `${siteUrl}/products?category=${collection.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+  ];
 }

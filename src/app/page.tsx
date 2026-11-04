@@ -8,10 +8,15 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ProductCard } from "@/components/product-card";
 import { Button } from "@/components/ui/button";
-import { CartProvider, useCart } from "@/lib/cart-context";
+import { useCart } from "@/lib/cart-context";
 import { ScrollStory } from "@/components/scroll-story";
-import { fetchProducts, type Product } from "@/lib/store-data";
-import { storeConfig, brands, collections } from "@/lib/config";
+import { fetchProducts, formatPrice, type Product } from "@/lib/store-data";
+import { brands, collections } from "@/lib/config";
+import { useStore } from "@/lib/store-context";
+import { OffersBanner } from "@/components/kit/offers-banner";
+import { ClothingRailHero, type RailGarment } from "@/components/ui/product-rail-gallery";
+import { subscribeBanners, isBannerLive } from "@/lib/firebase";
+import type { Banner } from "@/lib/types";
 
 function Hero3DLazy({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
   const [Mounted, setMounted] = useState(false);
@@ -30,6 +35,7 @@ function Hero3DInner({ scrollProgress }: { scrollProgress: React.MutableRefObjec
 }
 
 function HeroSection({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const storeConfig = useStore();
   return (
     <section data-hero-scale className="relative flex min-h-[85vh] items-center overflow-hidden bg-cream">
       {/* 3D background */}
@@ -99,6 +105,95 @@ function BrandGallery() {
           ))}
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Reference #10 — Offers banner. Rendered from Admin → Banners, so an empty
+ * admin means no banner rather than invented copy or a phantom code.
+ */
+function BannerSection() {
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => subscribeBanners(setBanners), []);
+
+  const banner = banners
+    .filter((row) => isBannerLive(row) && (row.placement === "home_offers" || row.placement === "announcement"))
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))[0];
+
+  const wanted = banner?.product_ids ?? [];
+
+  useEffect(() => {
+    if (!banner) return;
+    fetchProducts({ limit: 8 })
+      .then((result) => {
+        const chosen = wanted.length
+          ? result.products.filter((product) => wanted.includes(product.id))
+          : result.products.filter((product) => product.is_featured);
+        setProducts(chosen.length ? chosen : result.products.slice(0, 4));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [banner?.id]);
+
+  if (!banner) return null;
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8">
+      <OffersBanner
+        eyebrow="Offer"
+        title={banner.title}
+        description={banner.subtitle}
+        code={banner.code}
+        ctaHref={banner.link || "/offers"}
+        ctaLabel="See all offers"
+        products={products.map((product) => ({
+          id: product.id,
+          name: product.name,
+          subtitle: product.brand_name,
+          price: product.sale_price ?? product.price,
+          image: product.images[0] ?? "",
+          href: `/products/${product.id}`,
+        }))}
+      />
+    </section>
+  );
+}
+
+/** The clothing rail — browse new arrivals as pieces hanging on a rack. */
+function NewOnTheRail({ products }: { products: Product[] }) {
+  const items: RailGarment[] = products
+    .filter((product) => product.images.length > 0)
+    .slice(0, 6)
+    .map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.brand_name ? `${product.brand_name} · ${formatPrice(product.sale_price ?? product.price)}` : formatPrice(product.sale_price ?? product.price),
+      image: product.images[0],
+      cutout: product.image_cutout ?? undefined,
+      tag: formatPrice(product.sale_price ?? product.price),
+      href: `/products/${product.id}`,
+      details: [product.brand_name, product.category_name, product.fabric].filter((value): value is string => Boolean(value)),
+    }));
+
+  if (items.length === 0) return null;
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+      <ClothingRailHero
+        hanger="wood"
+        eyebrow="New this week"
+        heading="New on the rail"
+        caption="Move along the rail, or open a piece to shop it."
+        items={items}
+        action={
+          <Button asChild>
+            <Link href="/products">Shop all pieces</Link>
+          </Button>
+        }
+      />
     </section>
   );
 }
@@ -240,6 +335,7 @@ function QualityStory() {
 }
 
 function StoreVisit() {
+  const storeConfig = useStore();
   return (
     <section className="border-t border-border bg-secondary/30 py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -283,11 +379,12 @@ function StoreVisit() {
 }
 
 function TrustBar() {
+  const storeConfig = useStore();
   const items = [
     { icon: Truck, label: "Free Shipping", detail: `Orders above ₹${storeConfig.freeShippingThreshold}` },
-    { icon: RotateCcw, label: "Easy Returns", detail: "7-day return policy" },
-    { icon: Shield, label: "Secure Checkout", detail: "COD & online payment" },
-    { icon: Star, label: "4.84 Rating", detail: "Google reviews" },
+    { icon: RotateCcw, label: "Easy Returns", detail: `${storeConfig.returnWindowDays}-day return policy` },
+    { icon: Shield, label: "Secure Checkout", detail: storeConfig.codAvailable ? "COD & online payment" : "Online payment" },
+    { icon: Star, label: `${storeConfig.googleRating} Rating`, detail: "Google reviews" },
   ];
 
   return (
@@ -324,7 +421,7 @@ function HomePageContent() {
   }, []);
 
   useEffect(() => {
-    fetchProducts({ limit: "8" }).then(r => setProducts(r.products)).catch(() => {});
+    fetchProducts({ limit: 8 }).then(r => setProducts(r.products)).catch(() => {});
   }, []);
 
   return (
@@ -333,6 +430,8 @@ function HomePageContent() {
       <ScrollStory>
         <main>
           <HeroSection scrollProgress={scrollProgress} />
+          <BannerSection />
+          <NewOnTheRail products={products} />
           <BrandGallery />
           <CollectionsSection />
           <FeaturedProducts products={products} />
@@ -348,8 +447,8 @@ function HomePageContent() {
 
 export default function HomePage() {
   return (
-    <CartProvider>
+    <>
       <HomePageContent />
-    </CartProvider>
+    </>
   );
 }

@@ -11,9 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CartProvider } from "@/lib/cart-context";
 import { fetchProducts, type Product } from "@/lib/store-data";
 import { brands, collections } from "@/lib/config";
+import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
+import { TagSearch } from "@/components/kit/tag-search";
+import { PageSpinner } from "@/components/kit/spinner";
 
 const ALL_SIZES = ["0-6M", "6-12M", "12-18M", "18-24M", "2-3Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y"];
 
@@ -27,6 +29,7 @@ function ProductsContent() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam);
   const [searchQuery, setSearchQuery] = useState(searchParam || "");
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 3000]);
   const [sortBy, setSortBy] = useState("newest");
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,11 +53,20 @@ function ProductsContent() {
       filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(q) ||
         (p.brand_name || "").toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q)
+        (p.description ?? "").toLowerCase().includes(q)
       );
     }
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(p => {
+        const haystack = [p.name, p.brand_name, p.category_name, p.description, ...(p.tags ?? [])]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return selectedTags.every(tag => haystack.includes(tag.toLowerCase()));
+      });
+    }
     if (selectedSizes.length > 0) {
-      filtered = filtered.filter(p => p.sizes.some(s => selectedSizes.includes(s)));
+      filtered = filtered.filter(p => (p.sizes ?? []).some(s => selectedSizes.includes(s)));
     }
     filtered = filtered.filter(p => {
       const price = p.sale_price ?? p.price;
@@ -73,7 +85,26 @@ function ProductsContent() {
         filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
     return filtered;
-  }, [products, selectedBrand, selectedCategory, searchQuery, selectedSizes, priceRange, sortBy]);
+  }, [products, selectedBrand, selectedCategory, searchQuery, selectedSizes, selectedTags, priceRange, sortBy]);
+
+  // Our own vocabulary, built from what is actually in the catalogue.
+  const tagSuggestions = useMemo(() => {
+    const counts = new Map<string, number>();
+    const bump = (raw?: string | null) => {
+      const tag = (raw ?? "").trim();
+      if (tag.length < 3) return;
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    };
+    products.forEach(product => {
+      bump(product.brand_name);
+      bump(product.category_name);
+      (product.tags ?? []).forEach(bump);
+    });
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 24)
+      .map(([tag]) => tag);
+  }, [products]);
 
   const toggleSize = (size: string) => {
     setSelectedSizes(prev => prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]);
@@ -84,6 +115,7 @@ function ProductsContent() {
     setSelectedCategory(null);
     setSearchQuery("");
     setSelectedSizes([]);
+    setSelectedTags([]);
     setPriceRange([0, 3000]);
   };
 
@@ -188,7 +220,18 @@ function ProductsContent() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
+      <PageBreadcrumb
+        items={[
+          { label: "Shop", href: "/products" },
+          ...(selectedBrand
+            ? [{ label: brands.find(b => b.slug === selectedBrand)?.name ?? selectedBrand }]
+            : selectedCategory
+            ? [{ label: collections.find(c => c.slug === selectedCategory)?.name ?? selectedCategory }]
+            : []),
+        ]}
+        className="-mt-2"
+      />
+      <div className="mb-6">
         <h1 className="font-serif text-3xl font-medium sm:text-4xl">
           {selectedBrand
             ? brands.find(b => b.slug === selectedBrand)?.name
@@ -209,6 +252,18 @@ function ProductsContent() {
         </aside>
 
         <div className="flex-1">
+          {tagSuggestions.length > 0 ? (
+            <TagSearch
+              value={selectedTags}
+              onChange={setSelectedTags}
+              suggestions={tagSuggestions}
+              label="Filter by"
+              placeholder="Filter by brand or collection…"
+              max={6}
+              className="mb-4"
+            />
+          ) : null}
+
           <div className="mb-6 flex items-center justify-between gap-3">
             <Sheet>
               <SheetTrigger asChild>
@@ -269,16 +324,16 @@ function ProductsContent() {
 
 export default function ProductsPage() {
   return (
-    <CartProvider>
+    <>
       <div className="min-h-screen">
         <Header />
         <main>
-          <Suspense fallback={<div className="flex h-96 items-center justify-center text-muted-foreground">Loading...</div>}>
+          <Suspense fallback={<PageSpinner label="Loading the shop" />}>
             <ProductsContent />
           </Suspense>
         </main>
         <Footer />
       </div>
-    </CartProvider>
+    </>
   );
 }
