@@ -364,10 +364,17 @@ export async function findOrderForTracking(
     return direct.phone_last4 === phoneLast4.trim() ? direct : null;
   }
 
-  const snapshot = await get(query(rtdbRef("tracking"), orderByChild("order_number"), equalTo(key)));
-  const matches = toList<OrderTracking>(snapshot.val() as EntityMap<OrderTracking> | null);
-  const match = matches.find((entry) => entry.phone_last4 === phoneLast4.trim());
-  return match ?? null;
+  // Fallback for records written before the key was always the order number.
+  // `tracking` is no longer listable (only an exact order number is readable),
+  // so this query is expected to be refused and must not throw at the caller.
+  try {
+    const snapshot = await get(query(rtdbRef("tracking"), orderByChild("order_number"), equalTo(key)));
+    const matches = toList<OrderTracking>(snapshot.val() as EntityMap<OrderTracking> | null);
+    const match = matches.find((entry) => entry.phone_last4 === phoneLast4.trim());
+    return match ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Settings & messages ────────────────────────────────────

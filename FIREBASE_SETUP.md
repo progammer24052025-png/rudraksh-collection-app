@@ -71,10 +71,14 @@ into Firebase Console → Realtime Database → **Rules** and publish.
 
 What the rules do:
 
-- Catalogue (`products`, `brands`, `categories`), `settings` and `tracking` are
-  publicly readable — the storefront needs them before anyone signs in.
+- Catalogue (`products`, `brands`, `categories`), `settings`, `coupons` and
+  `banners` are publicly readable — the storefront needs them before anyone
+  signs in, and `/offers` lists the live coupon codes on purpose.
+- `tracking` is **not** listable: only `tracking/{order-number}` can be read, one
+  key at a time, so nobody can download the order book. This is what makes the
+  order-number + phone-digits check on `/track-order` meaningful.
 - Everything else is private. Customers can read and write only their own
-  `users/{uid}` profile and see only their own orders.
+  `users/{uid}` profile and `activity/{uid}`, and see only their own orders.
 - Orders and tracking records may be **created** by guests (needed for guest
   checkout) but never overwritten by them; only admins can update.
 - `admins/{uid}` can be bootstrapped **once**, by the account whose email matches
@@ -84,7 +88,16 @@ What the rules do:
   can read the list, approve or dismiss it.
 - Contact messages can be created by anyone, read only by admins.
 
-Publish the rules **before** going live with real customer data.
+Publish the rules **before** going live with real customer data. Publishing is a
+manual step (the repo is the source of truth, the console is what enforces it):
+
+```bash
+node scripts/verify-rules.mjs                      # anonymous check, no data printed
+node scripts/verify-rules.mjs --key=RC-20260101-AB12  # + one order lookup
+```
+
+The script fails while `coupons` / `banners` are denied or `tracking` is still
+listable, and passes once the rules above are published.
 
 ## 4. Creating the first admin
 

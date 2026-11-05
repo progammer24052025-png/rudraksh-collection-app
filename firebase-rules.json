@@ -25,6 +25,17 @@
         ".read": true,
         ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()"
       },
+      "banners": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()"
+      },
+      "coupons": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "code"
+        ]
+      },
       "admins": {
         ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         "$uid": {
@@ -71,12 +82,18 @@
           }
         }
       },
+      "activity": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
       "tracking": {
-        ".read": true,
         ".indexOn": [
           "order_number"
         ],
         "$orderNumber": {
+          ".read": true,
           ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists() || (!data.exists() && newData.hasChildren(['order_number', 'order_status', 'phone_last4']))",
           ".validate": "newData.hasChildren(['order_number', 'order_status', 'phone_last4']) && newData.child('order_number').val() === $orderNumber && newData.child('phone_last4').val().length === 4 || !newData.exists()"
         }
