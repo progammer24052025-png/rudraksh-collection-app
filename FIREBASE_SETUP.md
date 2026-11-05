@@ -63,6 +63,18 @@ every hostname the site is served from, for example:
 Without this, Google sign-in fails with `auth/unauthorized-domain` and phone
 sign-in can hang while reCAPTCHA refuses the origin.
 
+Vercel notes:
+
+- Add the **bare hostname only** — `rudraksh-collection-app.vercel.app`, not
+  `https://…`, no trailing slash. Wildcards are not supported, so a
+  deployment-specific preview URL (`…-git-main-….vercel.app`) needs its own
+  entry; use the production alias while testing instead.
+- If the browser key is referrer-restricted (Google Cloud → APIs & Services →
+  Credentials), the Vercel hostname must be listed there too, with Identity
+  Toolkit API enabled for that key.
+- `NEXT_PUBLIC_FIREBASE_*` values are baked into the bundle at build time, so
+  changing them in Vercel only takes effect after a **new deployment**.
+
 ## 3. Security rules
 
 The database currently ships wide open, which lets anyone read every customer

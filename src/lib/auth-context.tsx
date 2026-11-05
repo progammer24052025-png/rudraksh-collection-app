@@ -100,7 +100,7 @@ type AuthContextValue = {
   initRecaptcha: (containerId: string) => void;
   sendPhoneOTP: (phone: string) => Promise<boolean>;
   verifyPhoneOTP: (otp: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
+  loginWithGoogle: () => Promise<{ ok: boolean; error: string | null }>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<boolean>;
   clearError: () => void;
@@ -258,16 +258,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [confirmationResult],
   );
 
-  const loginWithGoogle = useCallback(async (): Promise<boolean> => {
+  const loginWithGoogle = useCallback(async (): Promise<{ ok: boolean; error: string | null }> => {
     setError(null);
     try {
       const googleUser = await withTimeout(signInWithGoogleAccount(), "Google sign-in", 90_000);
       await ensureProfile(googleUser);
-      return true;
+      return { ok: true, error: null };
     } catch (err) {
       console.error("loginWithGoogle:", err);
-      setError(describeAuthError(err));
-      return false;
+      // Returned as well as stored: callers read the result synchronously, so the
+      // state update above is not visible to them in the same tick.
+      const message = describeAuthError(err);
+      setError(message);
+      return { ok: false, error: message };
     }
   }, []);
 

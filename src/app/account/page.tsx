@@ -188,11 +188,11 @@ function LoginScreen() {
 
   const handleGoogle = async () => {
     setBusy("google");
-    const ok = await loginWithGoogle();
+    const result = await loginWithGoogle();
     setBusy(null);
-    if (ok) toast.success("Signed in with Google");
+    if (result.ok) toast.success("Signed in with Google");
     else {
-      toast.error(error || "Google sign-in failed");
+      toast.error(result.error || "Google sign-in failed");
       clearError();
     }
   };
