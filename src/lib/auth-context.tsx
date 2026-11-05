@@ -19,6 +19,7 @@ import {
 import type { ConfirmationResult, RecaptchaVerifier, User } from "firebase/auth";
 
 import {
+  completeRedirectSignIn,
   confirmPhoneCode,
   createRecaptchaVerifier,
   emptyProfile,
@@ -128,6 +129,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let unsubscribeProfile: (() => void) | null = null;
+
+    // A Google sign-in that used the redirect fallback lands back here; without
+    // this its failure would be silent until the next attempt.
+    completeRedirectSignIn()
+      .then((returned) => {
+        if (returned) {
+          ensureProfile(returned).catch((err) =>
+            console.warn("Could not sync profile after redirect sign-in:", err),
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("Redirect sign-in failed:", err);
+        setError(describeAuthError(err));
+      });
 
     let unsubscribeAuth: () => void = () => {};
     try {
@@ -262,7 +278,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const googleUser = await withTimeout(signInWithGoogleAccount(), "Google sign-in", 90_000);
-      await ensureProfile(googleUser);
+      // null means the pop-up was refused and the redirect flow took over: the
+      // page navigates away and `watchAuth` finishes the sign-in on return.
+      if (googleUser) await ensureProfile(googleUser);
       return { ok: true, error: null };
     } catch (err) {
       console.error("loginWithGoogle:", err);

@@ -17,6 +17,8 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -633,12 +635,42 @@ export async function confirmPhoneCode(result: ConfirmationResult, code: string)
   return credential.user;
 }
 
-export async function signInWithGoogleAccount(): Promise<User> {
+/** Pop-up failures that mean "this browser will not open a pop-up". */
+const REDIRECT_FALLBACK_CODES = new Set([
+  "auth/popup-blocked",
+  "auth/operation-not-supported-in-this-environment",
+  "auth/cancelled-popup-request",
+]);
+
+/**
+ * Returns the signed-in user, or `null` when the redirect flow was started
+ * instead — the browser leaves the page and comes back with a session that
+ * `watchAuth` picks up.
+ */
+export async function signInWithGoogleAccount(): Promise<User | null> {
+  const auth = getFirebaseAuth();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const credential = await signInWithPopup(getFirebaseAuth(), provider);
-  void logActivity(credential.user.uid, { type: "signin", label: "Signed in with Google" });
-  return credential.user;
+  try {
+    const credential = await signInWithPopup(auth, provider);
+    void logActivity(credential.user.uid, { type: "signin", label: "Signed in with Google" });
+    return credential.user;
+  } catch (err) {
+    const code = (err as { code?: string } | null)?.code ?? "";
+    // Mobile browsers, in-app webviews and iframed previews refuse pop-ups.
+    // The redirect flow works there, so fall back instead of failing.
+    if (REDIRECT_FALLBACK_CODES.has(code)) {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+/** Finishes a Google redirect sign-in; resolves to null when there was none. */
+export async function completeRedirectSignIn(): Promise<User | null> {
+  const result = await getRedirectResult(getFirebaseAuth());
+  return result?.user ?? null;
 }
 
 export async function setRememberSession(remember: boolean) {
