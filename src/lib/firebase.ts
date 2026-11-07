@@ -273,6 +273,31 @@ export interface NewOrderInput {
   notes?: string | null;
 }
 
+/**
+ * Asks the server to send one transactional email. Fire-and-forget on purpose:
+ * mail must never block a sign-in or an order, and an unconfigured mailbox is
+ * a silent no-op rather than a checkout error.
+ */
+async function requestEmail(payload: Record<string, unknown>): Promise<void> {
+  try {
+    const user = getFirebaseAuth().currentUser;
+    const idToken = user ? await user.getIdToken() : null;
+    const response = await fetch("/api/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok && response.status !== 503) {
+      console.warn("Email notification skipped:", payload.kind, response.status);
+    }
+  } catch (error) {
+    console.warn("Email notification failed:", error);
+  }
+}
+
 /** Creates the order, the per-user index and the public tracking record. */
 export async function placeOrder(input: NewOrderInput): Promise<Order> {
   const now = new Date().toISOString();
@@ -321,6 +346,14 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
   };
   await writeValue(["tracking", orderNumber], tracking);
 
+  void requestEmail({
+    kind: "order",
+    orderNumber,
+    event: "placed",
+    email: order.email ?? undefined,
+    phoneLast4: input.phone.slice(-4),
+  });
+
   return { ...order, id: orderId };
 }
 
@@ -352,6 +385,11 @@ export async function updateOrderStatus(
     status_history: history,
     updated_at: now,
   });
+
+  // Customers hear about every meaningful step, not just the first one.
+  if (status !== current.order_status) {
+    void requestEmail({ kind: "order", orderNumber: current.order_number, event: status });
+  }
 }
 
 export async function findOrderForTracking(
@@ -515,6 +553,8 @@ export async function ensureProfile(user: User): Promise<UserProfile> {
   }
   const profile = emptyProfile(user);
   await writeValue(["users", user.uid], profile);
+  // First profile for this account = first sign-in, so send the welcome once.
+  if (profile.email) void requestEmail({ kind: "welcome" });
   return profile;
 }
 
