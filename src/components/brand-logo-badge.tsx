@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 // Official styling & logotypes for each curated brand
 const BRAND_METAS: Record<
   string,
@@ -74,7 +76,19 @@ const BRAND_METAS: Record<
   },
 };
 
-export function BrandLogoBadge({ slug, name }: { slug: string; name: string }) {
+export function BrandLogoBadge({
+  slug,
+  name,
+  logo,
+  className = "",
+}: {
+  slug: string;
+  name: string;
+  logo?: string | null;
+  className?: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+
   const meta = BRAND_METAS[slug] || BRAND_METAS[name] || {
     tagline: "Kidswear",
     accent: "#4B5563",
@@ -85,30 +99,47 @@ export function BrandLogoBadge({ slug, name }: { slug: string; name: string }) {
   const words = name.split(/\s+/).filter(Boolean);
   const monogram = words.length > 1 ? `${words[0][0]}${words[1][0]}` : name.slice(0, 2).toUpperCase();
 
+  const hasValidLogo = Boolean(logo && logo.trim() && !imageError);
+
   return (
     <div
-      className="relative flex h-full w-full flex-col items-center justify-center rounded-full p-2 text-center transition-all duration-300"
-      style={{ backgroundColor: meta.bg }}
+      className={`relative flex h-full w-full items-center justify-center overflow-hidden rounded-full transition-all duration-300 ${
+        hasValidLogo ? "p-2 bg-white" : "p-2"
+      } ${className}`}
+      style={{ backgroundColor: hasValidLogo ? "#FFFFFF" : meta.bg }}
     >
-      {/* Decorative inner ring */}
-      <div
-        className="absolute inset-1.5 rounded-full border border-dashed opacity-40 transition-opacity group-hover:opacity-80"
-        style={{ borderColor: meta.accent }}
-      />
+      {/* Decorative dashed inner ring ONLY shown for monogram fallback, hidden for real logos */}
+      {!hasValidLogo && (
+        <div
+          className="absolute inset-1.5 rounded-full border border-dashed opacity-40 transition-opacity group-hover:opacity-80 pointer-events-none"
+          style={{ borderColor: meta.accent }}
+        />
+      )}
 
-      {/* Styled Brand Monogram / Logotype */}
-      <span
-        className="font-serif text-lg sm:text-xl font-bold tracking-wider"
-        style={{ color: meta.accent }}
-      >
-        {monogram}
-      </span>
-      <span
-        className="mt-0.5 text-[9px] sm:text-[10px] font-semibold tracking-wider uppercase opacity-80"
-        style={{ color: meta.accent }}
-      >
-        {name.length > 9 ? name.slice(0, 8) + "…" : name}
-      </span>
+      {hasValidLogo ? (
+        <img
+          src={logo!.trim()}
+          alt={name}
+          onError={() => setImageError(true)}
+          className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="flex flex-col items-center justify-center text-center">
+          {/* Styled Brand Monogram / Logotype */}
+          <span
+            className="font-serif text-lg sm:text-xl font-bold tracking-wider"
+            style={{ color: meta.accent }}
+          >
+            {monogram}
+          </span>
+          <span
+            className="mt-0.5 text-[9px] sm:text-[10px] font-semibold tracking-wider uppercase opacity-80"
+            style={{ color: meta.accent }}
+          >
+            {name.length > 9 ? name.slice(0, 8) + "…" : name}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

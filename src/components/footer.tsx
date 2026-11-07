@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Phone, Mail, MapPin, Instagram, Clock, MessageCircle } from "lucide-react";
 import { useStore } from "@/lib/store-context";
-import { brands } from "@/lib/config";
+import { brands as fallbackBrands } from "@/lib/config";
+import { subscribeBrands } from "@/lib/firebase";
+import type { Brand } from "@/lib/types";
 
 const SHOP_LINKS = [
   { label: "All Products", href: "/products" },
@@ -26,6 +29,16 @@ const CARE_LINKS = [
 
 export function Footer() {
   const store = useStore();
+  const [brandsList, setBrandsList] = useState<Brand[]>([]);
+
+  useEffect(() => {
+    return subscribeBrands((list) => {
+      const active = list.filter((b) => b.status !== "hidden");
+      if (active.length > 0) setBrandsList(active);
+    });
+  }, []);
+
+  const displayBrands = brandsList.length > 0 ? brandsList : fallbackBrands;
 
   return (
     <footer className="border-t border-border bg-secondary/50">
@@ -67,7 +80,7 @@ export function Footer() {
           <div>
             <h3 className="font-serif text-base font-semibold">Brands</h3>
             <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-              {brands.slice(0, 8).map((brand) => (
+              {displayBrands.slice(0, 8).map((brand) => (
                 <li key={brand.slug}>
                   <Link
                     href={`/brands/${brand.slug}`}

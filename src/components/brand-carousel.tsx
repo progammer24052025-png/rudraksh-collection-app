@@ -1,13 +1,38 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Marquee from "react-fast-marquee";
-import { brands } from "@/lib/config";
+import { brands as fallbackBrands } from "@/lib/config";
+import { subscribeBrands } from "@/lib/firebase";
+import type { Brand } from "@/lib/types";
 import { BrandLogoBadge } from "./brand-logo-badge";
 
 export { BrandLogoBadge };
 
 export function BrandCarousel() {
+  const [brandsList, setBrandsList] = useState<Brand[]>([]);
+
+  useEffect(() => {
+    return subscribeBrands((list) => {
+      const active = list.filter((b) => b.status !== "hidden");
+      if (active.length > 0) {
+        setBrandsList(active);
+      }
+    });
+  }, []);
+
+  const displayBrands =
+    brandsList.length > 0
+      ? brandsList
+      : fallbackBrands.map((b) => ({
+          id: b.slug,
+          name: b.name,
+          slug: b.slug,
+          status: "active" as const,
+          created_at: "",
+        }));
+
   return (
     <section className="relative border-y border-border/80 bg-secondary/20 py-14 overflow-hidden">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mb-8 text-center">
@@ -33,15 +58,19 @@ export function BrandCarousel() {
         gradientWidth={60}
         className="py-3"
       >
-        {brands.map((brand) => (
+        {displayBrands.map((brand) => (
           <Link
             key={brand.slug}
             href={`/brands/${brand.slug}`}
             className="group mx-4 sm:mx-6 flex flex-col items-center text-center cursor-pointer select-none"
           >
-            {/* Circular Logo Container with hover interaction */}
-            <div className="relative flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-full border-2 border-border/80 bg-card p-1.5 shadow-sm transition-all duration-300 ease-out group-hover:scale-110 group-hover:border-primary group-hover:shadow-md">
-              <BrandLogoBadge slug={brand.slug} name={brand.name} />
+            {/* Circular Logo Container: spacious, subtle single border, maximum room for logo */}
+            <div className="relative flex h-28 w-28 sm:h-32 sm:w-32 items-center justify-center rounded-full border border-border/70 bg-white p-2 shadow-sm transition-all duration-300 ease-out group-hover:scale-105 group-hover:border-primary group-hover:shadow-md overflow-hidden">
+              <BrandLogoBadge
+                slug={brand.slug}
+                name={brand.name}
+                logo={"logo" in brand ? (brand.logo as string | null) : null}
+              />
             </div>
 
             {/* Brand Title below circle */}

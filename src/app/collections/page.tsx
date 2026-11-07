@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { collections } from "@/lib/config";
+import { collections as fallbackCollections } from "@/lib/config";
+import { subscribeCategories } from "@/lib/firebase";
+import type { Category } from "@/lib/types";
 import { motion } from "framer-motion";
 
 const IMAGES: Record<string, string> = {
@@ -17,6 +20,30 @@ const IMAGES: Record<string, string> = {
 };
 
 export default function CollectionsPage() {
+  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+
+  useEffect(() => {
+    return subscribeCategories((list) => {
+      const active = list.filter((c) => c.status !== "hidden");
+      if (active.length > 0) {
+        setCategoriesList(active);
+      }
+    });
+  }, []);
+
+  const displayCollections =
+    categoriesList.length > 0
+      ? categoriesList
+      : fallbackCollections.map((c) => ({
+          id: c.slug,
+          name: c.name,
+          slug: c.slug,
+          image: IMAGES[c.slug] || null,
+          description: null as string | null,
+          status: "active" as const,
+          created_at: "",
+        }));
+
   return (
     <>
       <div className="min-h-screen">
@@ -31,33 +58,46 @@ export default function CollectionsPage() {
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {collections.map((col, idx) => (
-              <motion.div
-                key={col.slug}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.08, duration: 0.4 }}
-              >
-                <Link
-                  href={`/products?category=${col.slug}`}
-                  className="group relative block aspect-[4/5] overflow-hidden rounded-lg bg-muted"
+            {displayCollections.map((col, idx) => {
+              const imageSrc =
+                ("image" in col && col.image) ||
+                IMAGES[col.slug] ||
+                IMAGES["boys-wear"];
+
+              return (
+                <motion.div
+                  key={col.slug}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.08, duration: 0.4 }}
                 >
-                  <Image
-                    src={IMAGES[col.slug] || IMAGES["boys-wear"]}
-                    alt={col.name}
-                    fill
-                    className="object-cover transition-transform duration-700 group-hover:scale-105"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 33vw"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <h2 className="font-serif text-2xl font-medium text-white">{col.name}</h2>
-                    <span className="mt-1 block text-sm text-white/80">Explore Collection →</span>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+                  <Link
+                    href={`/products?category=${col.slug}`}
+                    className="group relative block aspect-[4/5] overflow-hidden rounded-lg bg-muted"
+                  >
+                    <Image
+                      src={imageSrc}
+                      alt={col.name}
+                      fill
+                      unoptimized={imageSrc.startsWith("data:")}
+                      className="object-cover transition-transform duration-700 group-hover:scale-105"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 33vw"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-6">
+                      <h2 className="font-serif text-2xl font-medium text-white">{col.name}</h2>
+                      {col.description && (
+                        <p className="mt-0.5 text-xs text-white/70 line-clamp-2">
+                          {col.description}
+                        </p>
+                      )}
+                      <span className="mt-1 block text-sm text-white/80">Explore Collection →</span>
+                    </div>
+                  </Link>
+                </motion.div>
+              );
+            })}
           </div>
         </main>
         <Footer />

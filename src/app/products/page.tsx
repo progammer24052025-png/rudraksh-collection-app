@@ -12,7 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchProducts, type Product } from "@/lib/store-data";
-import { brands, collections } from "@/lib/config";
+import { brands as fallbackBrands, collections as fallbackCollections } from "@/lib/config";
+import { subscribeBrands, subscribeCategories } from "@/lib/firebase";
+import type { Brand, Category } from "@/lib/types";
 import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
 import { TagSearch } from "@/components/kit/tag-search";
 import { PageSpinner } from "@/components/kit/spinner";
@@ -34,6 +36,26 @@ function ProductsContent() {
   const [sortBy, setSortBy] = useState("newest");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [liveBrands, setLiveBrands] = useState<Brand[]>([]);
+  const [liveCategories, setLiveCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    const unsubBrands = subscribeBrands((list) => {
+      const active = list.filter((b) => b.status !== "hidden");
+      if (active.length > 0) setLiveBrands(active);
+    });
+    const unsubCats = subscribeCategories((list) => {
+      const active = list.filter((c) => c.status !== "hidden");
+      if (active.length > 0) setLiveCategories(active);
+    });
+    return () => {
+      unsubBrands();
+      unsubCats();
+    };
+  }, []);
+
+  const brandsList = liveBrands.length > 0 ? liveBrands : fallbackBrands;
+  const collectionsList = liveCategories.length > 0 ? liveCategories : fallbackCollections;
 
   useEffect(() => {
     setLoading(true);
@@ -143,7 +165,7 @@ function ProductsContent() {
               !selectedBrand ? "bg-primary text-primary-foreground" : "hover:bg-muted"
             }`}
           >All Brands</button>
-          {brands.map(b => (
+          {brandsList.map(b => (
             <button
               key={b.slug}
               onClick={() => setSelectedBrand(b.slug)}
@@ -164,7 +186,7 @@ function ProductsContent() {
               !selectedCategory ? "bg-primary text-primary-foreground" : "hover:bg-muted"
             }`}
           >All Collections</button>
-          {collections.map(c => (
+          {collectionsList.map(c => (
             <button
               key={c.slug}
               onClick={() => setSelectedCategory(c.slug)}
@@ -224,9 +246,9 @@ function ProductsContent() {
         items={[
           { label: "Shop", href: "/products" },
           ...(selectedBrand
-            ? [{ label: brands.find(b => b.slug === selectedBrand)?.name ?? selectedBrand }]
+            ? [{ label: brandsList.find(b => b.slug === selectedBrand)?.name ?? selectedBrand }]
             : selectedCategory
-            ? [{ label: collections.find(c => c.slug === selectedCategory)?.name ?? selectedCategory }]
+            ? [{ label: collectionsList.find(c => c.slug === selectedCategory)?.name ?? selectedCategory }]
             : []),
         ]}
         className="-mt-2"
@@ -234,9 +256,9 @@ function ProductsContent() {
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-medium sm:text-4xl">
           {selectedBrand
-            ? brands.find(b => b.slug === selectedBrand)?.name
+            ? brandsList.find(b => b.slug === selectedBrand)?.name
             : selectedCategory
-            ? collections.find(c => c.slug === selectedCategory)?.name
+            ? collectionsList.find(c => c.slug === selectedCategory)?.name
             : searchQuery
             ? `Search: "${searchQuery}"`
             : "All Products"}

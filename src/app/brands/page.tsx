@@ -1,13 +1,38 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
-import { brands } from "@/lib/config";
+import { brands as fallbackBrands } from "@/lib/config";
+import { subscribeBrands } from "@/lib/firebase";
+import type { Brand } from "@/lib/types";
 import { motion } from "framer-motion";
 import { BrandLogoBadge } from "@/components/brand-logo-badge";
 
 export default function BrandsPage() {
+  const [brandsList, setBrandsList] = useState<Brand[]>([]);
+
+  useEffect(() => {
+    return subscribeBrands((list) => {
+      const active = list.filter((b) => b.status !== "hidden");
+      if (active.length > 0) {
+        setBrandsList(active);
+      }
+    });
+  }, []);
+
+  const displayBrands =
+    brandsList.length > 0
+      ? brandsList
+      : fallbackBrands.map((b) => ({
+          id: b.slug,
+          name: b.name,
+          slug: b.slug,
+          status: "active" as const,
+          created_at: "",
+        }));
+
   return (
     <>
       <div className="min-h-screen">
@@ -23,7 +48,7 @@ export default function BrandsPage() {
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {brands.map((brand, idx) => (
+            {displayBrands.map((brand, idx) => (
               <motion.div
                 key={brand.slug}
                 initial={{ opacity: 0, y: 16 }}
@@ -35,8 +60,12 @@ export default function BrandsPage() {
                   href={`/brands/${brand.slug}`}
                   className="group flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-8 text-center transition-all hover:border-primary/50 hover:shadow-lg"
                 >
-                  <div className="relative mb-4 flex h-24 w-24 items-center justify-center rounded-full border-2 border-border/80 bg-background p-1.5 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:border-primary">
-                    <BrandLogoBadge slug={brand.slug} name={brand.name} />
+                  <div className="relative mb-4 flex h-28 w-28 sm:h-32 sm:w-32 items-center justify-center rounded-full border border-border/70 bg-white p-2 shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:border-primary group-hover:shadow-md overflow-hidden">
+                    <BrandLogoBadge
+                      slug={brand.slug}
+                      name={brand.name}
+                      logo={"logo" in brand ? (brand.logo as string | null) : null}
+                    />
                   </div>
                   <span className="font-serif text-xl font-medium transition-colors group-hover:text-primary">
                     {brand.name}

@@ -194,8 +194,41 @@ export const subscribeProducts = (
 
 export const subscribeBrands = (callback: (brands: Brand[]) => void) =>
   subscribeValue<EntityMap<Brand>>(["brands"], (value) =>
-    callback(toList<Brand>(value).sort((a, b) => a.name.localeCompare(b.name))),
+    callback(
+      toList<Brand>(value).sort(
+        (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name),
+      ),
+    ),
   );
+
+export const fetchBrands = async (): Promise<Brand[]> =>
+  toList<Brand>(await readValue(["brands"])).sort(
+    (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name),
+  );
+
+export async function saveBrand(brand: Partial<Brand> & { name: string }): Promise<Brand> {
+  const now = new Date().toISOString();
+  const slug = (brand.slug || brand.name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  const id = brand.id?.trim() || slug || `brand-${Date.now().toString(36)}`;
+  const record: Brand = {
+    id,
+    name: brand.name.trim(),
+    slug: slug || id,
+    logo: brand.logo?.trim() || null,
+    description: brand.description?.trim() || null,
+    status: brand.status ?? "active",
+    sort_order: typeof brand.sort_order === "number" ? brand.sort_order : 0,
+    created_at: brand.created_at ?? now,
+  };
+  await writeValue(["brands", id], record);
+  return record;
+}
+
+export const deleteBrand = (id: string) => removeValue(["brands", id]);
 
 export const subscribeCategories = (callback: (categories: Category[]) => void) =>
   subscribeValue<EntityMap<Category>>(["categories"], (value) =>
@@ -205,6 +238,35 @@ export const subscribeCategories = (callback: (categories: Category[]) => void) 
       ),
     ),
   );
+
+export const fetchCategories = async (): Promise<Category[]> =>
+  toList<Category>(await readValue(["categories"])).sort(
+    (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name),
+  );
+
+export async function saveCategory(category: Partial<Category> & { name: string }): Promise<Category> {
+  const now = new Date().toISOString();
+  const slug = (category.slug || category.name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  const id = category.id?.trim() || slug || `cat-${Date.now().toString(36)}`;
+  const record: Category = {
+    id,
+    name: category.name.trim(),
+    slug: slug || id,
+    image: category.image?.trim() || null,
+    description: category.description?.trim() || null,
+    status: category.status ?? "active",
+    sort_order: typeof category.sort_order === "number" ? category.sort_order : 0,
+    created_at: category.created_at ?? now,
+  };
+  await writeValue(["categories", id], record);
+  return record;
+}
+
+export const deleteCategory = (id: string) => removeValue(["categories", id]);
 
 export const fetchProducts = async (): Promise<Product[]> => toList<Product>(await readValue(["products"]));
 

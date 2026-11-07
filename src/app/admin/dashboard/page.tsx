@@ -5,23 +5,36 @@ import Link from "next/link";
 import { Package, ShoppingBag, TrendingUp, Plus, ArrowRight, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
-import { formatPrice, subscribeOrders, subscribeProducts, subscribeMessages } from "@/lib/firebase";
+import {
+  formatPrice,
+  subscribeOrders,
+  subscribeProducts,
+  subscribeMessages,
+  subscribeBrands,
+  subscribeCategories,
+} from "@/lib/firebase";
 import { statusLabel } from "@/lib/orders";
-import type { ContactMessage, Order, Product } from "@/lib/types";
+import type { Brand, Category, ContactMessage, Order, Product } from "@/lib/types";
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     const offOrders = subscribeOrders(setOrders);
     const offProducts = subscribeProducts(setProducts);
     const offMessages = subscribeMessages(setMessages);
+    const offBrands = subscribeBrands(setBrands);
+    const offCategories = subscribeCategories(setCategories);
     return () => {
       offOrders();
       offProducts();
       offMessages();
+      offBrands();
+      offCategories();
     };
   }, []);
 
@@ -99,24 +112,44 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Link
+            href="/admin/brands"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
+          >
+            <div>
+              <p className="font-medium">Brands & Logos</p>
+              <p className="text-sm text-muted-foreground">{brands.length} brand partners</p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          </Link>
+          <Link
+            href="/admin/collections"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
+          >
+            <div>
+              <p className="font-medium">Collections</p>
+              <p className="text-sm text-muted-foreground">{categories.length} store categories</p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          </Link>
           <Link
             href="/admin/orders"
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/30"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
           >
             <div>
               <p className="font-medium">Manage orders</p>
-              <p className="text-sm text-muted-foreground">Update status and payment</p>
+              <p className="text-sm text-muted-foreground">Update status & payment</p>
             </div>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </Link>
           <Link
             href="/admin/settings"
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/30"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
           >
             <div>
               <p className="font-medium">Store settings</p>
-              <p className="text-sm text-muted-foreground">Contact details, shipping and hours</p>
+              <p className="text-sm text-muted-foreground">Contact & shipping</p>
             </div>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </Link>

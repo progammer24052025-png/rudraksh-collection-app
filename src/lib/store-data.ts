@@ -7,14 +7,33 @@ import {
   effectivePrice,
   fetchProductBySlug,
   fetchProducts as fetchAllProducts,
+  fetchBrands,
+  fetchCategories,
   formatPrice,
   placeOrder,
+  saveBrand,
+  deleteBrand,
+  saveCategory,
+  deleteCategory,
+  subscribeBrands,
+  subscribeCategories,
   type NewOrderInput,
 } from "./firebase";
-import type { CartItem, Order, Product } from "./types";
+import type { Brand, CartItem, Category, Order, Product } from "./types";
 
-export type { CartItem, Order, Product };
-export { effectivePrice, formatPrice };
+export type { Brand, CartItem, Category, Order, Product };
+export {
+  deleteBrand,
+  deleteCategory,
+  effectivePrice,
+  fetchBrands,
+  fetchCategories,
+  formatPrice,
+  saveBrand,
+  saveCategory,
+  subscribeBrands,
+  subscribeCategories,
+};
 
 export interface ProductFilters {
   brand?: string;

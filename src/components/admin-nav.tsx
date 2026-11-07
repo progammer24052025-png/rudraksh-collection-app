@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  Layers,
   Megaphone,
   Package,
   Settings,
   ShoppingBag,
+  Sparkles,
   Store,
   LogOut,
   Mail,
@@ -20,6 +22,8 @@ import { useAdmin } from "@/lib/admin-context";
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Products", href: "/admin/products", icon: Package },
+  { label: "Brands", href: "/admin/brands", icon: Sparkles },
+  { label: "Collections", href: "/admin/collections", icon: Layers },
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Coupons", href: "/admin/coupons", icon: Ticket },
   { label: "Banners", href: "/admin/banners", icon: Megaphone },

@@ -7,13 +7,28 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ProductCard } from "@/components/product-card";
 import { fetchProducts, type Product } from "@/lib/store-data";
-import { brands } from "@/lib/config";
+import { brands as fallbackBrands } from "@/lib/config";
+import { subscribeBrands } from "@/lib/firebase";
+import type { Brand } from "@/lib/types";
+import { BrandLogoBadge } from "@/components/brand-logo-badge";
 
 export default function BrandPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const brand = brands.find(b => b.slug === slug);
+  const [liveBrand, setLiveBrand] = useState<Brand | null>(null);
+
+  useEffect(() => {
+    return subscribeBrands((list) => {
+      const match = list.find((b) => b.slug === slug || b.id === slug);
+      if (match) setLiveBrand(match);
+    });
+  }, [slug]);
+
+  const fallback = fallbackBrands.find((b) => b.slug === slug);
+  const brandName = liveBrand?.name || fallback?.name || slug.replace(/-/g, " ");
+  const brandDescription = liveBrand?.description || null;
+  const brandLogo = liveBrand?.logo || null;
 
   useEffect(() => {
     setLoading(true);
@@ -35,13 +50,23 @@ export default function BrandPage({ params }: { params: Promise<{ slug: string }
             <ChevronLeft className="h-4 w-4" /> All Brands
           </Link>
 
-          <div className="mb-8">
-            <h1 className="font-serif text-3xl font-medium sm:text-4xl">
-              {brand?.name || slug.replace(/-/g, " ")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {loading ? "Loading..." : `${products.length} product${products.length !== 1 ? "s" : ""}`}
-            </p>
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+            <div className="relative h-24 w-24 sm:h-28 sm:w-28 shrink-0 rounded-full border border-border/70 bg-white p-2 shadow-sm overflow-hidden">
+              <BrandLogoBadge slug={slug} name={brandName} logo={brandLogo} />
+            </div>
+            <div>
+              <h1 className="font-serif text-3xl font-medium sm:text-4xl">
+                {brandName}
+              </h1>
+              {brandDescription && (
+                <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
+                  {brandDescription}
+                </p>
+              )}
+              <p className="mt-1.5 text-xs text-muted-foreground/80">
+                {loading ? "Loading..." : `${products.length} product${products.length !== 1 ? "s" : ""}`}
+              </p>
+            </div>
           </div>
 
           {loading ? (
