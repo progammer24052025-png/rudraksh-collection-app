@@ -35,9 +35,21 @@ type SmtpConfig = {
 
 const env = (name: string) => process.env[name]?.trim() || "";
 
+/**
+ * Vercel panels invite copy-paste slips: quotes around the value, and the spaced
+ * form Gmail shows App passwords in ("abcd efgh ijkl mnop"). Gmail's SMTP
+ * rejects the spaced form, so a 16-character code is collapsed to bare text.
+ */
+function normalisePassword(raw: string): string {
+  const value = raw.replace(/^["'\u201c\u201d](.*)["'\u201c\u201d]$/s, "$1").trim();
+  // Only Gmail's "abcd efgh ijkl mnop" display shape is collapsed, never a real
+  // password that happens to contain a space.
+  return /^[A-Za-z0-9]{4}(?: [A-Za-z0-9]{4}){3}$/.test(value) ? value.replace(/ /g, "") : value;
+}
+
 function smtpConfig(): SmtpConfig | null {
   const user = env("SMTP_USER");
-  const password = env("SMTP_PASSWORD");
+  const password = normalisePassword(env("SMTP_PASSWORD"));
   if (!user || !password) return null;
   return {
     host: env("SMTP_HOST") || "smtp.gmail.com",
@@ -123,6 +135,15 @@ class SmtpChannel {
 }
 
 const code = (reply: string) => reply.slice(0, 3);
+
+/** 535/534 mean the mailbox accepted the connection but refused the login. */
+const AUTH_HINT =
+  "Gmail refused these credentials. SMTP_USER must be the full address of the sending mailbox, " +
+  "and SMTP_PASSWORD its own 16-character App password (Google Account → Security → App passwords, " +
+  "which needs 2-Step Verification first). A normal Gmail password, an App password made on a " +
+  "different account, or one revoked by a Google password change all fail exactly like this.";
+
+const explain = (detail: string) => (/\b53[45][ -]/.test(detail) ? `${detail} ${AUTH_HINT}` : detail);
 
 function requireCode(reply: string, expected: string, step: string): void {
   if (code(reply) !== expected) {
@@ -239,7 +260,7 @@ export async function sendMail(mail: OutgoingMail): Promise<{ ok: boolean; error
     await channel.command("QUIT").catch(() => "");
     return { ok: true };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = explain(error instanceof Error ? error.message : String(error));
     // Gmail's usual failure here is a missing or revoked App password.
     console.error("SMTP send failed:", detail);
     return { ok: false, error: `Could not send the email: ${detail}` };
@@ -265,7 +286,7 @@ export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
     await channel.command("QUIT").catch(() => "");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: explain(error instanceof Error ? error.message : String(error)) };
   } finally {
     channel?.close();
   }

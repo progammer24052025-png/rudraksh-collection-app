@@ -59,7 +59,7 @@ The route pins `runtime = "nodejs"` because SMTP needs a real socket. Port 465
 
 | Symptom | Cause |
 | --- | --- |
-| `535 5.7.8 Username and Password not accepted` | Wrong or revoked App password, or 2-Step Verification is off |
+| `535 5.7.8 Username and Password not accepted` | The App password is wrong, belongs to another account, was revoked by a Google password change, or 2-Step Verification is off. The server strips the cosmetic spaces and surrounding quotes Google's panel adds, so a correctly copied code needs no cleanup. |
 | `Connection timed out` / `ECONNREFUSED` | Port 465 blocked, or `SMTP_HOST` is not the mailbox host |
 | Response `{"skipped":"no-email"}` | The account or order has no email address — phone-only sign-in, or a guest order without one |
 | Welcome never arrives, order mail does | The account already had a profile; the welcome is only sent once per new profile |
