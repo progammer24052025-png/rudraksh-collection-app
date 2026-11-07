@@ -355,6 +355,60 @@ const STATUS_COPY: Record<
   },
 };
 
+export function loginAlertEmail(input: {
+  name?: string | null;
+  email: string;
+  method: string;
+  ip?: string | null;
+  userAgent?: string | null;
+}): MailContent {
+  const when = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const device = input.userAgent
+    ? input.userAgent.length > 80
+      ? input.userAgent.slice(0, 80) + "…"
+      : input.userAgent
+    : "Unknown device";
+
+  const blocks = `<div style="margin:18px 0 0;padding:16px 18px;background:${CREAM};border-radius:12px;">
+      <div style="font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:${ROSE};margin-bottom:8px;">Sign-in details</div>
+      <div style="font-size:13px;line-height:1.9;color:${INK};">
+        <strong>When:</strong> ${escape(when)} IST<br />
+        <strong>Method:</strong> ${escape(input.method)}<br />
+        <strong>IP address:</strong> ${escape(input.ip || "Unknown")}<br />
+        <strong>Device:</strong> ${escape(device)}
+      </div>
+    </div>`;
+
+  const text = [
+    greeting(input.name),
+    "",
+    `We noticed a new sign-in to your ${storeConfig.name} account.`,
+    "",
+    `When: ${when} IST`,
+    `Method: ${input.method}`,
+    `IP: ${input.ip || "Unknown"}`,
+    `Device: ${device}`,
+    "",
+    "If this was you, no action is needed.",
+    "If you did not sign in, please change your password immediately or contact us.",
+    "",
+    `${storeConfig.name} · ${storeConfig.location}`,
+    storeConfig.email,
+  ].join("\n");
+
+  return {
+    subject: `New sign-in to your ${storeConfig.name} account`,
+    html: layout({
+      preheader: `New sign-in detected on your ${storeConfig.name} account.`,
+      heading: "New sign-in detected",
+      intro: `${greeting(input.name)} we noticed a new sign-in to your ${storeConfig.name} account. Here are the details:`,
+      blocks,
+      closing: "If this was you, no action is needed. If you did not sign in, please change your password immediately or contact us.",
+    }),
+    text,
+  };
+}
+
 export function orderStatusEmail(order: EmailOrder, status: OrderStatus): MailContent {
   const copy = STATUS_COPY[status] ?? STATUS_COPY.placed;
 

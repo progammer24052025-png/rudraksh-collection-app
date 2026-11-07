@@ -22,6 +22,7 @@
 
 import { isMailConfigured, mailSender, sendMail, verifySmtp } from "@/lib/server/smtp";
 import {
+  loginAlertEmail,
   orderPlacedEmail,
   orderStatusEmail,
   toEmailOrder,
@@ -216,6 +217,21 @@ export async function POST(request: Request) {
     if (!reserve(`welcome:${caller.uid}`)) return json({ ok: true, skipped: "duplicate" });
 
     const mail = welcomeEmail({ name: caller.name, email: caller.email });
+    const result = await sendMail({ to: caller.email, ...mail });
+    return result.ok ? json({ ok: true }) : json({ ok: false, error: result.error }, 502);
+  }
+
+  if (body.kind === "login_alert") {
+    if (!caller?.email) return json({ ok: true, skipped: "no-email" });
+    if (!reserve(`login:${caller.uid}`)) return json({ ok: true, skipped: "duplicate" });
+
+    const mail = loginAlertEmail({
+      name: caller.name,
+      email: caller.email,
+      method: String(body.method ?? "Unknown"),
+      ip: String(body.ip ?? clientIp(request)),
+      userAgent: String(body.userAgent ?? request.headers.get("user-agent") ?? ""),
+    });
     const result = await sendMail({ to: caller.email, ...mail });
     return result.ok ? json({ ok: true }) : json({ ok: false, error: result.error }, 502);
   }

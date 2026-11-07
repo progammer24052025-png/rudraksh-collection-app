@@ -232,7 +232,10 @@ export const subscribeUserOrders = (uid: string, callback: (orders: Order[]) => 
       return;
     }
     const orders = await Promise.all(
-      Object.keys(index).map((orderId) => readValue<Order>(["orders", orderId])),
+      Object.keys(index).map(async (orderId) => {
+        const order = await readValue<Order>(["orders", orderId]);
+        return order ? ({ ...order, id: order.id || orderId } as Order) : null;
+      }),
     );
     callback(
       orders
@@ -549,6 +552,8 @@ export async function ensureProfile(user: User): Promise<UserProfile> {
     if (!existing.displayName && user.displayName) patch.displayName = user.displayName;
     if (!existing.photoURL && user.photoURL) patch.photoURL = user.photoURL;
     if (Object.keys(patch).length > 1) await updateValue(["users", user.uid], patch);
+    // Returning user — send a login alert on every sign-in.
+    void requestEmail({ kind: "login_alert", method: user.providerData?.[0]?.providerId ?? "unknown" });
     return { ...existing, ...patch } as UserProfile;
   }
   const profile = emptyProfile(user);

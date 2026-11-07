@@ -149,8 +149,8 @@ function LoginScreen() {
   };
 
   useEffect(() => {
-    if (isConfigured) initRecaptcha(recaptchaHostId);
-  }, [initRecaptcha, isConfigured]);
+    if (isConfigured && mode === "phone") initRecaptcha(recaptchaHostId);
+  }, [initRecaptcha, isConfigured, mode]);
 
   if (!isConfigured) return <FirebaseNotConfigured />;
 
@@ -520,8 +520,8 @@ function OrdersTab() {
         </div>
       ) : (
         <div className="space-y-4">
-          {orders.map((order) => (
-            <div key={order.id} className="rounded-lg border border-border p-4">
+          {orders.map((order, orderIndex) => (
+            <div key={order.id || order.order_number || `order-${orderIndex}`} className="rounded-lg border border-border p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-3">

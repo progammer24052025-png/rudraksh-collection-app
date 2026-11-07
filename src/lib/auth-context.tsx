@@ -196,6 +196,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const initRecaptcha = useCallback((containerId: string) => {
     if (!configured) return;
+    if (typeof document === "undefined") return;
+    const container = document.getElementById(containerId);
+    if (!container) return;
     if (verifierRef.current && verifierContainerRef.current === containerId) {
       setRecaptchaReady(true);
       return;
