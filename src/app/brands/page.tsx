@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { brands } from "@/lib/config";
 import { motion } from "framer-motion";
+import { BrandLogoBadge } from "@/components/brand-logo-badge";
 
 export default function BrandsPage() {
   return (
@@ -32,12 +33,15 @@ export default function BrandsPage() {
               >
                 <Link
                   href={`/brands/${brand.slug}`}
-                  className="group flex flex-col items-center justify-center rounded-lg border border-border bg-card p-10 text-center transition-all hover:border-sage/50 hover:shadow-lg"
+                  className="group flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-8 text-center transition-all hover:border-primary/50 hover:shadow-lg"
                 >
-                  <span className="font-serif text-2xl font-medium transition-colors group-hover:text-sage">
+                  <div className="relative mb-4 flex h-24 w-24 items-center justify-center rounded-full border-2 border-border/80 bg-background p-1.5 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:border-primary">
+                    <BrandLogoBadge slug={brand.slug} name={brand.name} />
+                  </div>
+                  <span className="font-serif text-xl font-medium transition-colors group-hover:text-primary">
                     {brand.name}
                   </span>
-                  <span className="mt-3 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                  <span className="mt-2 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
                     View Collection →
                   </span>
                 </Link>

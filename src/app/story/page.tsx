@@ -39,7 +39,7 @@ export default function StoryPage() {
                 </p>
                 <p>
                   We carry a carefully curated selection of children&apos;s wear from established
-                  brands like Macho, James, Hamper, Essa, Bodycare, Lux Lyra, Comfort, Shilpa,
+                  brands like Macho, James & Harper, Hamper, Essa, Bodycare, Lux Lyra, Comfort, Shilpa,
                   Hi-Rich, Hackucha, Topas, and Top-Gear. Each brand is chosen for its commitment
                   to quality fabrics, thoughtful designs, and fits that let kids be kids.
                 </p>

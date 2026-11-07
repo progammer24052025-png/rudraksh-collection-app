@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { parseGoogleMapsEmbedUrl } from "@/lib/maps";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -101,7 +102,7 @@ export default function AdminSettingsPage() {
         whatsapp: form.whatsapp.trim(),
         email: form.email.trim(),
         openingHours: form.openingHours.trim(),
-        googleMapsUrl: form.googleMapsUrl.trim(),
+        googleMapsUrl: parseGoogleMapsEmbedUrl(form.googleMapsUrl.trim(), form.address.trim()),
         instagram: form.instagram.trim(),
         announcement: form.announcement.trim(),
         freeShippingThreshold: Number(form.freeShippingThreshold) || 0,
@@ -195,12 +196,15 @@ export default function AdminSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>Google Maps embed URL</Label>
+            <Label>Google Maps embed URL or &lt;iframe&gt; code</Label>
             <Input
               value={form.googleMapsUrl}
               onChange={(event) => setForm({ ...form, googleMapsUrl: event.target.value })}
-              placeholder="https://www.google.com/maps/embed?pb=…"
+              placeholder="Paste embed URL or full <iframe> code from Google Maps"
             />
+            <p className="text-xs text-muted-foreground">
+              You can paste the entire &lt;iframe&gt; snippet from Google Maps — the embed URL is extracted automatically.
+            </p>
           </div>
 
           <div className="space-y-2">

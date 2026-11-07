@@ -40,7 +40,7 @@ export const storeConfig = {
 
 export const brands = [
   { slug: "macho", name: "Macho" },
-  { slug: "james", name: "James" },
+  { slug: "james-harper", name: "James & Harper" },
   { slug: "hamper", name: "Hamper" },
   { slug: "essa", name: "Essa" },
   { slug: "bodycare", name: "Bodycare" },

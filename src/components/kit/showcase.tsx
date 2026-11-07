@@ -19,13 +19,13 @@ const img = (id: string) => `https://images.unsplash.com/${id}?w=600&h=750&fit=c
 
 const RAIL = [
   { id: "p1", name: "Cotton Kurta Set", subtitle: "Macho · Ages 2–4", price: 849, image: img("photo-1518831959646-742c3a14ebf7"), href: "/products/p1" },
-  { id: "p2", name: "Denim Dungaree", subtitle: "James · Ages 4–6", price: 1199, image: img("photo-1522771930-78848d9293e8"), href: "/products/p2" },
+  { id: "p2", name: "Denim Dungaree", subtitle: "James & Harper · Ages 4–6", price: 1199, image: img("photo-1522771930-78848d9293e8"), href: "/products/p2" },
   { id: "p3", name: "Festive Lehenga", subtitle: "Hamper · Ages 6–8", price: 2499, image: img("photo-1503919545889-aef636e10ad4"), href: "/products/p3" },
   { id: "p4", name: "Knit Cardigan", subtitle: "Essa · Ages 0–2", price: 699, image: img("photo-1519238263530-99bdd11df2ea"), href: "/products/p4" },
   { id: "p5", name: "Play Pyjama Set", subtitle: "Comfort · Ages 2–6", price: 549, image: img("photo-1514090458221-65bb69cf63e6"), href: "/products/p5" },
 ];
 
-const TAGS = ["Macho", "James", "Hamper", "Essa", "Lux Lyra", "Newborn", "Toddlers", "Kids", "Festive", "Everyday", "Boys", "Girls", "Cotton", "Winter"];
+const TAGS = ["Macho", "James & Harper", "Hamper", "Essa", "Lux Lyra", "Newborn", "Toddlers", "Kids", "Festive", "Everyday", "Boys", "Girls", "Cotton", "Winter"];
 
 function Block({ n, title, note, children }: { n: number; title: string; note?: string; children: React.ReactNode }) {
   return (

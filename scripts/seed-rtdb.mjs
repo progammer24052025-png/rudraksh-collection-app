@@ -52,7 +52,7 @@ const img = (id) => `https://images.unsplash.com/${id}?w=800&h=1000&fit=crop`;
 // ── Brands ────────────────────────────────────────────────
 const BRANDS = [
   { slug: "macho", name: "Macho", description: "Everyday boys' wear built for play." },
-  { slug: "james", name: "James", description: "Casual denim and cotton staples for kids." },
+  { slug: "james-harper", name: "James & Harper", description: "Casual denim and cotton staples for kids." },
   { slug: "hamper", name: "Hamper", description: "Party and occasion outfits for little ones." },
   { slug: "essa", name: "Essa", description: "Soft knitwear and baby essentials." },
   { slug: "bodycare", name: "Bodycare", description: "Gentle cotton basics for babies." },
@@ -127,7 +127,7 @@ const PRODUCTS = [
   {
     slug: "boys-graphic-print-tshirt",
     name: "Boys' Graphic Print T-Shirt",
-    brand: "james",
+    brand: "james-harper",
     category: "casual-wear",
     description:
       "A soft cotton tee with a playful print and a comfortable round neck. Pre-shrunk so it keeps its shape wash after wash.",
@@ -295,7 +295,7 @@ const PRODUCTS = [
   {
     slug: "girls-denim-dungaree",
     name: "Girls' Denim Dungaree",
-    brand: "james",
+    brand: "james-harper",
     category: "casual-wear",
     description:
       "A classic dungaree in soft stretch denim with adjustable straps and a roomy front pocket. Layer it over a tee in every season.",

@@ -14,6 +14,7 @@ import { fetchProducts, formatPrice, type Product } from "@/lib/store-data";
 import { brands, collections } from "@/lib/config";
 import { useStore } from "@/lib/store-context";
 import { OffersBanner } from "@/components/kit/offers-banner";
+import { BrandCarousel } from "@/components/brand-carousel";
 import { ClothingRailHero, type RailGarment } from "@/components/ui/product-rail-gallery";
 import { subscribeBanners, isBannerLive } from "@/lib/firebase";
 import type { Banner } from "@/lib/types";
@@ -83,31 +84,7 @@ function HeroSection({ scrollProgress }: { scrollProgress: React.MutableRefObjec
   );
 }
 
-function BrandGallery() {
-  return (
-    <section className="border-y border-border bg-secondary/30 py-16">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div data-reveal className="mb-10 text-center">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Trusted Brands</p>
-          <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Curated for Little Ones</h2>
-        </div>
-        <div data-stagger className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
-          {brands.map((brand) => (
-            <Link
-              key={brand.slug}
-              href={`/brands/${brand.slug}`}
-              className="group flex aspect-square items-center justify-center rounded-lg border border-border bg-card p-4 transition-all hover:border-sage/50 hover:shadow-md"
-            >
-              <span className="text-center text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
-                {brand.name}
-              </span>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+
 
 /**
  * Reference #10 — Offers banner. Rendered from Admin → Banners, so an empty
@@ -364,13 +341,9 @@ function StoreVisit() {
             <Button asChild size="lg" className="rounded-full px-8">
               <Link href="/visit">Plan Your Visit</Link>
             </Button>
-            {storeConfig.googleMapsUrl && (
-              <Button asChild size="lg" variant="outline" className="rounded-full px-8">
-                <a href={storeConfig.googleMapsUrl} target="_blank" rel="noopener noreferrer">
-                  Get Directions
-                </a>
-              </Button>
-            )}
+            <Button asChild size="lg" variant="outline" className="rounded-full px-8">
+              <Link href="/directions">Get Directions</Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -432,7 +405,7 @@ function HomePageContent() {
           <HeroSection scrollProgress={scrollProgress} />
           <BannerSection />
           <NewOnTheRail products={products} />
-          <BrandGallery />
+          <BrandCarousel />
           <CollectionsSection />
           <FeaturedProducts products={products} />
           <QualityStory />

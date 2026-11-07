@@ -21,6 +21,7 @@ const CARE_LINKS = [
   { label: "Privacy Policy", href: "/privacy" },
   { label: "Terms & Conditions", href: "/terms" },
   { label: "Visit Our Store", href: "/visit" },
+  { label: "Get Directions", href: "/directions" },
 ];
 
 export function Footer() {
