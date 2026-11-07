@@ -342,7 +342,7 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
     order_status: "placed",
     payment_status: "pending",
     status_history: history,
-    phone_last4: input.phone.slice(-4),
+    phone_last4: input.phone.replace(/\D/g, "").slice(-4),
     total: input.total,
     created_at: now,
     updated_at: now,
@@ -397,23 +397,67 @@ export async function updateOrderStatus(
 
 export async function findOrderForTracking(
   orderNumber: string,
-  phoneLast4: string,
+  phoneLast4?: string,
 ): Promise<OrderTracking | null> {
-  const key = orderNumber.trim().toUpperCase();
+  const key = orderNumber
+    .trim()
+    .replace(/^#/, "")
+    .replace(/^Order\s*#?/i, "")
+    .trim()
+    .toUpperCase();
   if (!key) return null;
+
+  const cleanLast4 = (phoneLast4 ?? "").replace(/\D/g, "").slice(-4);
 
   const direct = await readValue<OrderTracking>(["tracking", key]);
   if (direct) {
-    return direct.phone_last4 === phoneLast4.trim() ? direct : null;
+    const directLast4 = (direct.phone_last4 ?? "").replace(/\D/g, "").slice(-4);
+    if (cleanLast4 && directLast4 === cleanLast4) {
+      return direct;
+    }
   }
 
-  // Fallback for records written before the key was always the order number.
-  // `tracking` is no longer listable (only an exact order number is readable),
-  // so this query is expected to be refused and must not throw at the caller.
+  // If a signed-in user is tracking their own order, allow lookup directly
+  try {
+    const currentUser = getFirebaseAuth().currentUser;
+    if (currentUser) {
+      const userIndex = await readValue<Record<string, { order_number?: string }>>([
+        "ordersByUser",
+        currentUser.uid,
+      ]);
+      if (userIndex) {
+        const match = Object.entries(userIndex).find(
+          ([, entry]) => (entry?.order_number || "").toUpperCase() === key,
+        );
+        if (match) {
+          if (direct) return direct;
+          const order = await readValue<Order>(["orders", match[0]]);
+          if (order) {
+            return {
+              order_number: order.order_number,
+              order_status: order.order_status,
+              payment_status: order.payment_status,
+              status_history: order.status_history || [{ status: order.order_status, at: order.created_at }],
+              phone_last4: (order.phone || "").replace(/\D/g, "").slice(-4),
+              total: order.total,
+              created_at: order.created_at,
+              updated_at: order.updated_at || order.created_at,
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    /* ignore auth index read failure */
+  }
+
+  // Fallback for older records
   try {
     const snapshot = await get(query(rtdbRef("tracking"), orderByChild("order_number"), equalTo(key)));
     const matches = toList<OrderTracking>(snapshot.val() as EntityMap<OrderTracking> | null);
-    const match = matches.find((entry) => entry.phone_last4 === phoneLast4.trim());
+    const match = matches.find(
+      (entry) => (entry.phone_last4 ?? "").replace(/\D/g, "").slice(-4) === cleanLast4,
+    );
     return match ?? null;
   } catch {
     return null;

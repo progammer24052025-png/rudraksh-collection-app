@@ -10,14 +10,16 @@ import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
 import { findOrderForTracking, formatPrice } from "@/lib/firebase";
 import { ORDER_TIMELINE, statusLabel } from "@/lib/orders";
 import type { OrderTracking } from "@/lib/types";
 
 function TrackOrderInner() {
   const searchParams = useSearchParams();
+  const { user, profile } = useAuth();
   const [orderNumber, setOrderNumber] = useState(searchParams.get("order") ?? "");
-  const [phoneLast4, setPhoneLast4] = useState("");
+  const [phoneInput, setPhoneInput] = useState("");
   const [result, setResult] = useState<OrderTracking | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -40,15 +42,35 @@ function TrackOrderInner() {
   useEffect(() => {
     const preset = searchParams.get("order");
     if (preset) {
-      setOrderNumber(preset);
+      const clean = preset.trim().replace(/^#/, "").toUpperCase();
+      setOrderNumber(clean);
+      if (user) {
+        // Auto-lookup for logged-in users clicking from their account page
+        lookup(clean, "");
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, user, lookup]);
+
+  useEffect(() => {
+    if (!phoneInput && profile?.phone) {
+      const digits = profile.phone.replace(/\D/g, "");
+      if (digits.length >= 4) {
+        setPhoneInput(digits.slice(-4));
+      }
+    }
+  }, [profile, phoneInput]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!orderNumber.trim()) return toast.error("Enter your order number");
-    if (phoneLast4.length !== 4) return toast.error("Enter the last 4 digits of your phone number");
-    lookup(orderNumber, phoneLast4);
+    const cleanOrder = orderNumber.trim().replace(/^#/, "").replace(/^Order\s*#?/i, "").trim().toUpperCase();
+    if (!cleanOrder) return toast.error("Enter your order number");
+    const digits = phoneInput.replace(/\D/g, "");
+    if (!digits && user) {
+      lookup(cleanOrder, "");
+      return;
+    }
+    if (digits.length < 4) return toast.error("Enter at least the last 4 digits of your phone number");
+    lookup(cleanOrder, digits.slice(-4));
   };
 
   const currentIndex = result ? ORDER_TIMELINE.indexOf(result.order_status) : -1;
@@ -60,7 +82,7 @@ function TrackOrderInner() {
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Order tracking</p>
         <h1 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Where is my order?</h1>
         <p className="mt-3 text-muted-foreground">
-          Enter your order number and the last 4 digits of the phone number used at checkout.
+          Enter your order number and the last 4 digits (or full 10-digit mobile number) used at checkout.
         </p>
       </div>
 
@@ -76,13 +98,12 @@ function TrackOrderInner() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">Last 4 digits of phone</Label>
+            <Label htmlFor="phone">Phone number or last 4 digits</Label>
             <Input
               id="phone"
-              value={phoneLast4}
-              onChange={(event) => setPhoneLast4(event.target.value.replace(/\D/g, "").slice(0, 4))}
-              inputMode="numeric"
-              placeholder="1234"
+              value={phoneInput}
+              onChange={(event) => setPhoneInput(event.target.value)}
+              placeholder="e.g. 9876543210 or 3210"
             />
           </div>
         </div>
