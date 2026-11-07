@@ -175,7 +175,7 @@ export default function VisitPage() {
                       <Car className="h-4 w-4 text-primary" /> Free Parking Available
                     </div>
                     <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-primary" /> AC Trial Rooms
+                      <Sparkles className="h-4 w-4 text-primary" />AC Store
                     </div>
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="h-4 w-4 text-primary" /> Card &amp; UPI Accepted
