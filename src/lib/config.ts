@@ -18,11 +18,14 @@ export const storeConfig = {
   googleReviewCount: null as number | null,
 
   // ── Contact details (edit in Admin → Settings) ──
-  address: "",
-  phone: "",
-  whatsapp: "",
-  email: "hello@rudrakshcollection.in",
-  openingHours: "",
+  address: `125, Pancham Heights,
+Khodiyar Nagar,
+New V.I.P. Road,
+Vadodara`,
+  phone: "+91 98765 43210",
+  whatsapp: "+91 98765 43210",
+  email: "support@rudrakshcollection.in",
+  openingHours: "Mon – Sat: 10:00 AM – 8:00 PM",
   googleMapsUrl: "",
   instagram: "",
 

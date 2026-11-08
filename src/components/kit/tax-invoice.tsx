@@ -4,7 +4,8 @@ import React from "react";
 import { Printer, Download, X, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/store-data";
-import { amountInWords, STORE_SELLER_DETAILS } from "@/lib/invoice-utils";
+import { amountInWords, STORE_SELLER_DETAILS, type SellerDetails } from "@/lib/invoice-utils";
+import { useStore } from "@/lib/store-context";
 
 export interface InvoiceItem {
   name: string;
@@ -46,7 +47,20 @@ interface TaxInvoiceProps {
 }
 
 export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoiceProps) {
-  const seller = STORE_SELLER_DETAILS;
+  const liveStore = useStore();
+  const seller: SellerDetails = {
+    storeName: liveStore.name || STORE_SELLER_DETAILS.storeName,
+    tagline: liveStore.tagline || STORE_SELLER_DETAILS.tagline,
+    legalEntity: liveStore.legalName || liveStore.name || STORE_SELLER_DETAILS.legalEntity,
+    address: liveStore.address || STORE_SELLER_DETAILS.address,
+    cityStatePincode: liveStore.location || STORE_SELLER_DETAILS.cityStatePincode,
+    gstin: liveStore.gstin || STORE_SELLER_DETAILS.gstin,
+    pan: STORE_SELLER_DETAILS.pan,
+    cin: STORE_SELLER_DETAILS.cin,
+    supportEmail: liveStore.email || liveStore.supportEmail || STORE_SELLER_DETAILS.supportEmail,
+    supportPhone: liveStore.phone || liveStore.whatsapp || STORE_SELLER_DETAILS.supportPhone,
+    website: STORE_SELLER_DETAILS.website,
+  };
   const invoiceNumber = data.invoiceNumber || `INV-${data.orderNumber}`;
   const isPaid = data.paymentStatus === "paid" || data.paymentMethod === "razorpay";
   const dateObj = typeof data.date === "string" ? new Date(data.date) : data.date;
@@ -128,7 +142,7 @@ export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoice
             <p className="text-[11px] text-slate-600 font-medium tracking-wide">{seller.tagline}</p>
             <div className="mt-2 text-[11px] text-slate-600 leading-relaxed">
               <p className="font-medium text-slate-900">{seller.legalEntity}</p>
-              <p>{seller.address}</p>
+              <p className="whitespace-pre-line leading-relaxed">{seller.address}</p>
               <p>{seller.cityStatePincode}</p>
               <p>
                 <span className="font-semibold text-slate-700">GSTIN:</span> {seller.gstin} |{" "}
@@ -175,7 +189,7 @@ export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoice
               Billing Address
             </h2>
             <p className="font-bold text-slate-900 text-sm">{data.customerName}</p>
-            <p className="text-slate-700 mt-1">{data.address}</p>
+            <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{data.address}</p>
             <p className="text-slate-700">
               {data.city}, {data.state} - {data.pincode}
             </p>
@@ -197,7 +211,7 @@ export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoice
               Shipping Address
             </h2>
             <p className="font-bold text-slate-900 text-sm">{data.customerName}</p>
-            <p className="text-slate-700 mt-1">{data.address}</p>
+            <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{data.address}</p>
             <p className="text-slate-700">
               {data.city}, {data.state} - {data.pincode}
             </p>
