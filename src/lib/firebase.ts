@@ -412,6 +412,8 @@ export interface NewOrderInput {
   payment_method: Order["payment_method"];
   payment_status?: Order["payment_status"];
   order_status?: Order["order_status"];
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
   notes?: string | null;
 }
 
@@ -470,6 +472,8 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
     total: input.total,
     payment_method: input.payment_method,
     payment_status: input.payment_status || "pending",
+    razorpay_order_id: input.razorpay_order_id ?? null,
+    razorpay_payment_id: input.razorpay_payment_id ?? null,
     order_status: input.order_status || "placed",
     notes: input.notes ?? null,
     status_history: history,
@@ -500,8 +504,8 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
 
   const tracking: OrderTracking = {
     order_number: orderNumber,
-    order_status: "placed",
-    payment_status: "pending",
+    order_status: order.order_status,
+    payment_status: order.payment_status,
     status_history: history,
     phone_last4: input.phone.replace(/\D/g, "").slice(-4),
     total: input.total,

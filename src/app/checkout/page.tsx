@@ -447,6 +447,8 @@ function CheckoutContent() {
         total: totals.total,
         payment_method: paymentMethod,
         payment_status: proof ? "paid" : "pending",
+        razorpay_order_id: proof?.razorpay_order_id ?? null,
+        razorpay_payment_id: proof?.razorpay_payment_id ?? null,
         order_status: proof ? "confirmed" : "placed",
       });
 
