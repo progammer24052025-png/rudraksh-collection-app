@@ -79,8 +79,27 @@ const firebaseConfig = {
 /** Root node inside the Realtime Database reserved for this store. */
 export const DB_ROOT = process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh";
 
-/** Email allowed to bootstrap the first admin account. */
-export const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@rudrakshcollection.in";
+/** Emails allowed to bootstrap or access store owner/admin accounts. */
+export const DEFAULT_ADMIN_EMAILS = [
+  "admin@rudrakshcollection.in",
+  "progammer.24052025@gmail.com",
+  "rudrakshcollection22309@gmail.com",
+];
+
+export const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || DEFAULT_ADMIN_EMAILS[0];
+
+export const getAdminEmails = (): string[] => {
+  const envList = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set([...envList, ...DEFAULT_ADMIN_EMAILS.map((e) => e.toLowerCase())]));
+};
+
+export const isAllowedAdminEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  return getAdminEmails().includes(email.trim().toLowerCase());
+};
 
 export const isFirebaseConfigured = (): boolean =>
   Boolean(

@@ -21,6 +21,7 @@ import type { User } from "firebase/auth";
 
 import {
   ADMIN_EMAIL,
+  isAllowedAdminEmail,
   createEmailAccount,
   grantAdmin,
   isFirebaseConfigured,
@@ -84,14 +85,16 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }
     setNeedsVerification(false);
 
-    // The configured owner email may bootstrap the very first admin.
-    if (email === ADMIN_EMAIL.toLowerCase()) {
+    // Configured owner/admin emails can immediately bootstrap or claim owner status
+    if (isAllowedAdminEmail(email)) {
       try {
         await grantAdmin(firebaseUser.uid, email, "owner");
         setPending(false);
+        setNeedsVerification(false);
+        setIsAdmin(true);
         return; // the live subscription below flips isAdmin
       } catch {
-        // Admins already exist — fall through to the request flow.
+        // Admins node exists or already handled — fall through to verify
       }
     }
 
@@ -170,21 +173,21 @@ export function AdminProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
-        if (normalized !== ADMIN_EMAIL.toLowerCase()) {
+        if (!isAllowedAdminEmail(normalized)) {
           setError("Incorrect email or password for a store team account.");
           return false;
         }
 
-        // First-run setup for the owner address only.
+        // First-run setup for the owner/admin address:
         try {
           const credential = await createEmailAccount(normalized, password);
-          await sendVerificationFor(credential.user);
-          setNeedsVerification(true);
-          setError(
-            "Account created. Confirm the verification email sent to " +
-              normalized +
-              ", then sign in again.",
-          );
+          try {
+            await grantAdmin(credential.user.uid, normalized, "owner");
+            setIsAdmin(true);
+            setNeedsVerification(false);
+          } catch {
+            /* admin record may already exist */
+          }
           return true;
         } catch (createError) {
           setError(describeAuthError(createError));
@@ -201,6 +204,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       await signInWithGoogleAccount();
       return true;
     } catch (err) {
+      const code = (err as { code?: string }).code ?? "";
+      if (code === "auth/popup-closed-by-user") return false;
+      if (code === "auth/unauthorized-domain") {
+        setError(
+          "This Vercel domain is not yet authorized for Google sign-in. Go to Firebase Console → Authentication → Settings → Authorized domains and add: rudraksh-collection-app-beta.vercel.app"
+        );
+        return false;
+      }
       setError(describeAuthError(err));
       return false;
     }

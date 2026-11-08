@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
     error,
     clearError,
   } = useAdmin();
-  const [email, setEmail] = useState(ADMIN_EMAIL);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -141,7 +141,7 @@ export default function AdminLoginPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="admin@rudrakshcollection.in"
+                placeholder="admin@rudrakshcollection.in or your email"
                 className="pl-9"
                 autoComplete="username"
                 required

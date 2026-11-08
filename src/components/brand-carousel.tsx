@@ -26,18 +26,18 @@ export function BrandCarousel() {
     brandsList.length > 0
       ? brandsList
       : fallbackBrands.map((b) => ({
-          id: b.slug,
-          name: b.name,
-          slug: b.slug,
-          status: "active" as const,
-          created_at: "",
-        }));
+        id: b.slug,
+        name: b.name,
+        slug: b.slug,
+        status: "active" as const,
+        created_at: "",
+      }));
 
   return (
     <section className="relative border-y border-border/80 bg-secondary/20 py-14 overflow-hidden">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mb-8 text-center">
         <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] text-primary">
-          Our Brand Partners
+          Our Brand Collection
         </p>
         <h2 className="mt-2 font-serif text-2xl font-medium sm:text-3xl lg:text-4xl">
           Curated for Little Ones

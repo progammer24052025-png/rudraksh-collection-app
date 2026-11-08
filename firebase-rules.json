@@ -40,7 +40,7 @@
         ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && ((auth.uid === $uid && !root.child('rudraksh/admins').exists() && auth.token.email_verified === true && newData.child('email').val() === auth.token.email && auth.token.email === 'admin@rudrakshcollection.in') || root.child('rudraksh/admins').child(auth.uid).exists())"
+          ".write": "auth != null && ((auth.uid === $uid && !root.child('rudraksh/admins').exists() && newData.child('email').val() === auth.token.email && (auth.token.email === 'admin@rudrakshcollection.in' || auth.token.email === 'progammer.24052025@gmail.com' || auth.token.email === 'rudrakshcollection22309@gmail.com')) || root.child('rudraksh/admins').child(auth.uid).exists())"
         }
       },
       "adminRequests": {

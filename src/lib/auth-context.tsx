@@ -70,7 +70,7 @@ export function describeAuthError(error: unknown): string {
     case "auth/operation-not-allowed":
       return "This sign-in method is not enabled for the store yet.";
     case "auth/unauthorized-domain":
-      return "This website address is not authorised for sign-in yet.";
+      return "This domain is not authorized for sign-in yet. In Firebase Console, go to Authentication → Settings → Authorized domains and add: rudraksh-collection-app-beta.vercel.app";
     case "auth/popup-blocked":
       return "Your browser blocked the Google sign-in window. Allow pop-ups and retry.";
     case "auth/popup-closed-by-user":
