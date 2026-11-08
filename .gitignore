@@ -12,7 +12,18 @@
 
 # testing
 /coverage
+
+# local env files (NEVER commit these)
 .env
+.env*.local
+.env.local
+.env.development
+.env.development.local
+.env.test.local
+.env.production
+.env.production.local
+serviceAccountKey.json
+*.serviceAccount.json
 
 # next.js
 /.next/
