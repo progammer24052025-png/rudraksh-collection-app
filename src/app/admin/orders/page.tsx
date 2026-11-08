@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, RefreshCw } from "lucide-react";
+import { Search, Loader2, RefreshCw, Check, FileText } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -42,8 +42,16 @@ export default function AdminOrdersPage() {
   const changeStatus = async (order: Order, status: OrderStatus) => {
     setBusyId(order.id);
     try {
-      await updateOrderStatus(order.id, status);
-      toast.success(`${order.order_number} → ${status}`);
+      const extra: { payment_status?: PaymentStatus } = {};
+      if (status === "delivered" && order.payment_method === "cod" && order.payment_status === "pending") {
+        extra.payment_status = "paid";
+      }
+      await updateOrderStatus(order.id, status, extra);
+      toast.success(
+        extra.payment_status
+          ? `${order.order_number} marked Delivered & Paid!`
+          : `${order.order_number} → ${status}`,
+      );
     } catch (error) {
       console.error(error);
       toast.error("Could not update the order status");
@@ -139,6 +147,17 @@ export default function AdminOrdersPage() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="mr-2 text-lg font-semibold">{formatPrice(order.total)}</p>
+                    {order.payment_status === "pending" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 text-xs bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        onClick={() => changePayment(order, "paid")}
+                        disabled={busyId === order.id}
+                      >
+                        <Check className="mr-1 h-3.5 w-3.5" /> Mark Paid
+                      </Button>
+                    )}
                     <Select value={order.order_status} onValueChange={(value) => changeStatus(order, value as OrderStatus)}>
                       <SelectTrigger className="w-36 capitalize"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -155,6 +174,11 @@ export default function AdminOrdersPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button asChild variant="ghost" size="sm" className="h-9 text-xs gap-1">
+                      <a href={`/invoice?order=${order.order_number}`} target="_blank" rel="noopener noreferrer">
+                        <FileText className="h-3.5 w-3.5" /> Invoice
+                      </a>
+                    </Button>
                   </div>
                 </div>
 
