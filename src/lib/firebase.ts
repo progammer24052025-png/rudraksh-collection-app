@@ -410,6 +410,8 @@ export interface NewOrderInput {
   shipping: number;
   total: number;
   payment_method: Order["payment_method"];
+  payment_status?: Order["payment_status"];
+  order_status?: Order["order_status"];
   notes?: string | null;
 }
 
@@ -440,13 +442,18 @@ async function requestEmail(payload: Record<string, unknown>): Promise<void> {
 
 /** Creates the order, the per-user index and the public tracking record. */
 export async function placeOrder(input: NewOrderInput): Promise<Order> {
+  const uid = input.user_id?.trim();
+  if (!uid || uid === "guest") {
+    throw new Error("Authentication required: You must be signed in to place an order.");
+  }
+
   const now = new Date().toISOString();
   const orderNumber = makeOrderNumber();
   const history: OrderStatusEvent[] = [{ status: "placed", at: now }];
 
   const order: Omit<Order, "id"> = {
     order_number: orderNumber,
-    user_id: input.user_id,
+    user_id: uid,
     customer_name: input.customer_name,
     phone: input.phone,
     email: input.email ?? null,
@@ -462,8 +469,8 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
     shipping: input.shipping,
     total: input.total,
     payment_method: input.payment_method,
-    payment_status: "pending",
-    order_status: "placed",
+    payment_status: input.payment_status || "pending",
+    order_status: input.order_status || "placed",
     notes: input.notes ?? null,
     status_history: history,
     created_at: now,
@@ -472,7 +479,24 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
 
   const orderId = await pushValue(["orders"], order);
 
-  await writeValue(["ordersByUser", input.user_id ?? "guest", orderId], { order_number: orderNumber });
+  await writeValue(["ordersByUser", uid, orderId], { order_number: orderNumber });
+
+  if (input.coupon_code) {
+    const cleanCode = input.coupon_code.trim().toUpperCase();
+    const phone10 = input.phone.replace(/\D/g, "").slice(-10);
+    const redemptionRecord = {
+      order_id: orderId,
+      order_number: orderNumber,
+      user_id: uid,
+      phone: phone10,
+      used_at: now,
+    };
+    await writeValue(["couponRedemptions", cleanCode, uid], redemptionRecord).catch(() => {});
+    await writeValue(["userCoupons", uid, cleanCode], redemptionRecord).catch(() => {});
+    if (phone10.length === 10) {
+      await writeValue(["couponRedemptionsByPhone", cleanCode, phone10], redemptionRecord).catch(() => {});
+    }
+  }
 
   const tracking: OrderTracking = {
     order_number: orderNumber,
@@ -641,6 +665,88 @@ export const readCoupons = async (): Promise<Coupon[]> =>
 
 export const readCoupon = (code: string) =>
   readValue<Coupon>(["coupons", couponKey(code)]);
+
+/**
+ * Checks whether a given user or mobile number has already redeemed this coupon.
+ * Enforces strictly one-time-use per customer.
+ */
+export async function checkUserCouponUsed(
+  couponCode: string,
+  userId?: string | null,
+  phone?: string | null,
+): Promise<{ used: boolean; reason?: string }> {
+  if (!couponCode) return { used: false };
+  const cleanCode = couponKey(couponCode);
+
+  // Check 1: couponRedemptions by userId
+  if (userId && userId !== "guest") {
+    const userRedemption = await readValue<{ order_number?: string; used_at?: string }>([
+      "couponRedemptions",
+      cleanCode,
+      userId,
+    ]);
+    if (userRedemption) {
+      return {
+        used: true,
+        reason: `You have already used coupon ${cleanCode}${userRedemption.order_number ? ` on order ${userRedemption.order_number}` : ""}. Each coupon can only be used once per customer.`,
+      };
+    }
+
+    const userCoupon = await readValue<{ order_number?: string }>([
+      "userCoupons",
+      userId,
+      cleanCode,
+    ]);
+    if (userCoupon) {
+      return {
+        used: true,
+        reason: `Coupon ${cleanCode} has already been applied to your account.`,
+      };
+    }
+  }
+
+  // Check 2: by normalized 10-digit phone
+  const phoneDigits = (phone ?? "").replace(/\D/g, "").slice(-10);
+  if (phoneDigits.length === 10) {
+    const phoneRedemption = await readValue<{ order_number?: string }>([
+      "couponRedemptionsByPhone",
+      cleanCode,
+      phoneDigits,
+    ]);
+    if (phoneRedemption) {
+      return {
+        used: true,
+        reason: `Coupon ${cleanCode} has already been redeemed for mobile number ending in ${phoneDigits.slice(-4)}.`,
+      };
+    }
+  }
+
+  // Check 3: Check recent orders of this user (covers orders before redemption index)
+  if (userId && userId !== "guest") {
+    try {
+      const ordersIndex = await readValue<Record<string, { order_number?: string } | true>>([
+        "ordersByUser",
+        userId,
+      ]);
+      if (ordersIndex) {
+        const orderIds = Object.keys(ordersIndex);
+        for (const orderId of orderIds.slice(-20)) {
+          const pastOrder = await readValue<Order>(["orders", orderId]);
+          if (pastOrder && pastOrder.coupon_code && couponKey(pastOrder.coupon_code) === cleanCode) {
+            return {
+              used: true,
+              reason: `You have already used coupon code ${cleanCode} on order ${pastOrder.order_number}.`,
+            };
+          }
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  return { used: false };
+}
 
 export async function saveCoupon(coupon: Coupon): Promise<void> {
   const code = couponKey(coupon.code);

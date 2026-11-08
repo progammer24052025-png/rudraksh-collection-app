@@ -30,7 +30,7 @@ export const storeConfig = {
   freeShippingThreshold: 999,
   shippingFee: 99,
   codAvailable: true,
-  razorpayEnabled: false,
+  razorpayEnabled: true,
   returnWindowDays: 7,
   dispatchDays: "1–2 business days",
   deliveryDays: "3–7 business days",

@@ -28,7 +28,7 @@ export async function GET() {
       ok: true,
       configured,
       secure,
-      available: configured && secure,
+      available: configured, // Razorpay is available whenever API keys are configured
       keyId: configured ? razorpayPublicKey() : null,
     },
     { headers: { "cache-control": "no-store" } },
@@ -39,15 +39,6 @@ export async function POST(request: Request) {
   if (!razorpayConfigured()) {
     return Response.json(
       { ok: false, error: "Online payment is not configured yet." },
-      { status: 503 },
-    );
-  }
-  if (!isSecureCheckout()) {
-    // Without the service account the order would have to be written by the
-    // browser after a real payment — if that write failed the customer would be
-    // charged with nothing to show for it. Refuse instead.
-    return Response.json(
-      { ok: false, error: "Online payment is unavailable right now. Please choose Cash on Delivery." },
       { status: 503 },
     );
   }

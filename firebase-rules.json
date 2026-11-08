@@ -36,6 +36,20 @@
           "code"
         ]
       },
+      "couponRedemptions": {
+        ".read": true,
+        ".write": "auth != null"
+      },
+      "couponRedemptionsByPhone": {
+        ".read": true,
+        ".write": "auth != null"
+      },
+      "userCoupons": {
+        "$uid": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
       "admins": {
         ".read": "auth != null",
         "$uid": {

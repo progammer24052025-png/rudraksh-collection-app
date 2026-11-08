@@ -27,6 +27,15 @@ export type CartRequest = {
   user_id?: string | null;
   coupon_code?: string | null;
   items?: CartItemInput[];
+  customer?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
 };
 
 export type PricedCart = {
@@ -123,6 +132,34 @@ export async function priceCart(body: CartRequest): Promise<PricedCartResult> {
       // Case-insensitive fallback for codes stored with mixed case.
       const match = Object.entries(coupons).find(([key]) => key.toUpperCase() === code);
       coupon = match ? match[1] : null;
+    }
+
+    if (coupon) {
+      const uid = body.user_id?.trim();
+      if (uid && uid !== "guest") {
+        const alreadyUsed = await publicGet(`couponRedemptions/${coupon.code}/${uid}`);
+        if (alreadyUsed) {
+          return {
+            ok: false,
+            status: 409,
+            error: `You have already used coupon code ${coupon.code}. Coupons can only be redeemed once per customer.`,
+            totals: computeTotals({ lines, coupon: null, config }),
+          };
+        }
+      }
+
+      const phone10 = digits(body.customer?.phone ?? "").slice(-10);
+      if (phone10.length === 10) {
+        const phoneUsed = await publicGet(`couponRedemptionsByPhone/${coupon.code}/${phone10}`);
+        if (phoneUsed) {
+          return {
+            ok: false,
+            status: 409,
+            error: `Coupon code ${coupon.code} has already been redeemed for this mobile number.`,
+            totals: computeTotals({ lines, coupon: null, config }),
+          };
+        }
+      }
     }
   }
 

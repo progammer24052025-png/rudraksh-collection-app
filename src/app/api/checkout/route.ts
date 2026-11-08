@@ -48,6 +48,14 @@ export async function POST(request: Request) {
 
   const customer = body.customer ?? {};
 
+  const uid = body.user_id?.trim();
+  if (!uid || uid === "guest") {
+    return Response.json(
+      { ok: false, error: "Authentication required: Please sign in to place an order." },
+      { status: 401 },
+    );
+  }
+
   if (!customer.name?.trim() || digits(customer.phone ?? "").length < 10) {
     return Response.json(
       { ok: false, error: "A name and a 10-digit phone are required." },
@@ -85,12 +93,6 @@ export async function POST(request: Request) {
     if (!razorpayConfigured()) {
       return Response.json(
         { ok: false, error: "Online payment is not configured yet." },
-        { status: 503 },
-      );
-    }
-    if (!secure) {
-      return Response.json(
-        { ok: false, error: "Online payment is unavailable right now. Please choose Cash on Delivery." },
         { status: 503 },
       );
     }
@@ -175,14 +177,14 @@ export async function POST(request: Request) {
   }
 
   if (!secure) {
-    // Totals are still server-computed; the order write itself stays client-side
-    // until the service-account secret is configured. COD only — online payment
-    // is refused above.
+    // Totals are still server-computed; the order write itself falls back to
+    // client-side when the service-account secret is not configured.
     return Response.json({
       ok: true,
       secure: false,
       totals,
       order: null,
+      payment: payment ? { id: payment.paymentId, status: "paid" as const } : null,
     });
   }
 
@@ -256,6 +258,22 @@ export async function POST(request: Request) {
         used_count: (appliedCoupon.used_count ?? 0) + 1,
         updated_at: iso,
       });
+
+      if (body.user_id) {
+        const phone10 = digits(customer.phone ?? "").slice(-10);
+        const record = {
+          order_id: orderId,
+          order_number: order.order_number,
+          user_id: body.user_id,
+          phone: phone10,
+          used_at: iso,
+        };
+        await adminSet(`couponRedemptions/${appliedCoupon.code}/${body.user_id}`, record);
+        await adminSet(`userCoupons/${body.user_id}/${appliedCoupon.code}`, record);
+        if (phone10.length === 10) {
+          await adminSet(`couponRedemptionsByPhone/${appliedCoupon.code}/${phone10}`, record);
+        }
+      }
     }
 
     if (body.user_id) {
