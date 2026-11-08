@@ -18,10 +18,13 @@ type FormState = Required<
     StoreSettings,
     | "storeName"
     | "tagline"
+    | "legalEntity"
     | "address"
+    | "cityStatePincode"
     | "phone"
     | "whatsapp"
     | "email"
+    | "website"
     | "openingHours"
     | "googleMapsUrl"
     | "instagram"
@@ -33,6 +36,8 @@ type FormState = Required<
   codAvailable: boolean;
   razorpayEnabled: boolean;
   gstin: string;
+  pan: string;
+  cin: string;
   taxLabel: string;
   taxRate: string;
   taxEnabled: boolean;
@@ -42,10 +47,13 @@ type FormState = Required<
 const DEFAULTS: FormState = {
   storeName: storeConfig.name,
   tagline: storeConfig.tagline,
+  legalEntity: storeConfig.legalEntity || "Rudraksh Collection Retail",
   address: storeConfig.address,
+  cityStatePincode: storeConfig.cityStatePincode || "Gujarat - 390019",
   phone: storeConfig.phone,
   whatsapp: storeConfig.whatsapp,
   email: storeConfig.email,
+  website: storeConfig.website || "www.rudrakshcollection.in",
   openingHours: storeConfig.openingHours,
   googleMapsUrl: storeConfig.googleMapsUrl,
   instagram: storeConfig.instagram,
@@ -54,7 +62,9 @@ const DEFAULTS: FormState = {
   shippingFee: String(storeConfig.shippingFee),
   codAvailable: storeConfig.codAvailable,
   razorpayEnabled: storeConfig.razorpayEnabled,
-  gstin: "",
+  gstin: storeConfig.gstin || "24AAACR1234F1Z5",
+  pan: storeConfig.pan || "AAACR1234F",
+  cin: storeConfig.cin || "U18101GJ2024PTC123456",
   taxLabel: "GST",
   taxRate: "5",
   taxEnabled: true,
@@ -76,11 +86,21 @@ export default function AdminSettingsPage() {
             Object.entries(settings).filter(([, value]) => value !== undefined && value !== null),
           ),
           storeName: settings.storeName ?? current.storeName,
+          tagline: settings.tagline ?? current.tagline,
+          legalEntity: settings.legalEntity ?? current.legalEntity,
+          address: settings.address ?? current.address,
+          cityStatePincode: settings.cityStatePincode ?? current.cityStatePincode,
+          phone: settings.phone ?? current.phone,
+          whatsapp: settings.whatsapp ?? current.whatsapp,
+          email: settings.email ?? current.email,
+          website: settings.website ?? current.website,
+          gstin: settings.gstin ?? current.gstin,
+          pan: settings.pan ?? current.pan,
+          cin: settings.cin ?? current.cin,
           freeShippingThreshold: String(settings.freeShippingThreshold ?? current.freeShippingThreshold),
           shippingFee: String(settings.shippingFee ?? current.shippingFee),
           codAvailable: settings.codAvailable ?? current.codAvailable,
           razorpayEnabled: settings.razorpayEnabled ?? current.razorpayEnabled,
-          gstin: settings.gstin ?? current.gstin,
           taxLabel: settings.tax?.label ?? current.taxLabel,
           taxRate: String(Math.round((settings.tax?.rate ?? 0.05) * 1000) / 10),
           taxEnabled: settings.tax?.enabled ?? current.taxEnabled,
@@ -97,10 +117,13 @@ export default function AdminSettingsPage() {
       await saveSettings({
         storeName: form.storeName.trim(),
         tagline: form.tagline.trim(),
+        legalEntity: form.legalEntity.trim(),
         address: form.address.trim(),
+        cityStatePincode: form.cityStatePincode.trim(),
         phone: form.phone.trim(),
         whatsapp: form.whatsapp.trim(),
         email: form.email.trim(),
+        website: form.website.trim(),
         openingHours: form.openingHours.trim(),
         googleMapsUrl: parseGoogleMapsEmbedUrl(form.googleMapsUrl.trim(), form.address.trim()),
         instagram: form.instagram.trim(),
@@ -110,6 +133,8 @@ export default function AdminSettingsPage() {
         codAvailable: form.codAvailable,
         razorpayEnabled: form.razorpayEnabled,
         gstin: form.gstin.trim(),
+        pan: form.pan.trim(),
+        cin: form.cin.trim(),
         tax: {
           enabled: form.taxEnabled,
           rate: Math.min(0.99, Math.max(0, (Number(form.taxRate) || 0) / 100)),
@@ -160,6 +185,25 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Legal Entity Name (Tax Invoice & Bill)</Label>
+              <Input
+                value={form.legalEntity}
+                onChange={(event) => setForm({ ...form, legalEntity: event.target.value })}
+                placeholder="Rudraksh Collection Retail"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Website URL</Label>
+              <Input
+                value={form.website}
+                onChange={(event) => setForm({ ...form, website: event.target.value })}
+                placeholder="www.rudrakshcollection.in"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Store Address</Label>
             <Textarea
@@ -167,6 +211,15 @@ export default function AdminSettingsPage() {
               onChange={(event) => setForm({ ...form, address: event.target.value })}
               rows={3}
               placeholder="Shop number, building, street, area, city, pincode"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>City, State & Pincode (Invoice Location)</Label>
+            <Input
+              value={form.cityStatePincode}
+              onChange={(event) => setForm({ ...form, cityStatePincode: event.target.value })}
+              placeholder="Gujarat - 390019"
             />
           </div>
 
@@ -270,11 +323,30 @@ export default function AdminSettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>GSTIN (optional)</Label>
+                <Label>GSTIN</Label>
                 <Input
                   value={form.gstin}
                   onChange={(event) => setForm({ ...form, gstin: event.target.value.toUpperCase() })}
-                  placeholder="22AAAAA0000A1Z5"
+                  placeholder="24AAACR1234F1Z5"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>PAN (Permanent Account Number)</Label>
+                <Input
+                  value={form.pan}
+                  onChange={(event) => setForm({ ...form, pan: event.target.value.toUpperCase() })}
+                  placeholder="AAACR1234F"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>CIN (Corporate Identity Number, optional)</Label>
+                <Input
+                  value={form.cin}
+                  onChange={(event) => setForm({ ...form, cin: event.target.value.toUpperCase() })}
+                  placeholder="U18101GJ2024PTC123456"
                 />
               </div>
             </div>

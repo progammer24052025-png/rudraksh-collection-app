@@ -7,24 +7,31 @@
 
 export const storeConfig = {
   name: "Rudraksh Collection",
-  legalName: "Rudraksh Collection",
-  tagline: "Little Moments, Beautifully Dressed",
+  storeName: "Rudraksh Collection",
+  legalName: "Rudraksh Collection Retail",
+  legalEntity: "Rudraksh Collection Retail",
+  tagline: "Children's Wear & Ethnic Studio",
   category: "Children's Wear",
   location: "Vadodara, Gujarat, India",
   city: "Vadodara",
   state: "Gujarat",
+  cityStatePincode: "Gujarat - 390019",
   country: "India",
   googleRating: 4.84,
   googleReviewCount: null as number | null,
 
-  // ── Contact details (edit in Admin → Settings) ──
+  // ── Contact & Legal details (edit in Admin → Settings) ──
   address: `125, Pancham Heights,
 Khodiyar Nagar,
 New V.I.P. Road,
 Vadodara`,
   phone: "+91 98765 43210",
   whatsapp: "+91 98765 43210",
-  email: "support@rudrakshcollection.in",
+  email: "help@rudrakshcollection.in",
+  website: "www.rudrakshcollection.in",
+  gstin: "24AAACR1234F1Z5",
+  pan: "AAACR1234F",
+  cin: "U18101GJ2024PTC123456",
   openingHours: "Mon – Sat: 10:00 AM – 8:00 PM",
   googleMapsUrl: "",
   instagram: "",
@@ -38,7 +45,6 @@ Vadodara`,
   dispatchDays: "1–2 business days",
   deliveryDays: "3–7 business days",
   currency: "INR",
-  gstin: "",
 };
 
 export const brands = [

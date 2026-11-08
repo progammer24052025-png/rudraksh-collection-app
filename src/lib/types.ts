@@ -183,10 +183,13 @@ export interface AdminRecord {
 export interface StoreSettings {
   storeName?: string;
   tagline?: string;
+  legalEntity?: string;
   address?: string;
+  cityStatePincode?: string;
   phone?: string;
   whatsapp?: string;
   email?: string;
+  website?: string;
   openingHours?: string;
   googleMapsUrl?: string;
   instagram?: string;
@@ -196,6 +199,8 @@ export interface StoreSettings {
   razorpayEnabled?: boolean;
   announcement?: string;
   gstin?: string;
+  pan?: string;
+  cin?: string;
   tax?: {
     enabled?: boolean;
     /** Fraction, e.g. 0.05 = 5%. */

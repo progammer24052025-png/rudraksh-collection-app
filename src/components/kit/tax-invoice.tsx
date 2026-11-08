@@ -49,17 +49,17 @@ interface TaxInvoiceProps {
 export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoiceProps) {
   const liveStore = useStore();
   const seller: SellerDetails = {
-    storeName: liveStore.name || STORE_SELLER_DETAILS.storeName,
+    storeName: liveStore.storeName || liveStore.name || STORE_SELLER_DETAILS.storeName,
     tagline: liveStore.tagline || STORE_SELLER_DETAILS.tagline,
-    legalEntity: liveStore.legalName || liveStore.name || STORE_SELLER_DETAILS.legalEntity,
+    legalEntity: liveStore.legalEntity || liveStore.legalName || STORE_SELLER_DETAILS.legalEntity,
     address: liveStore.address || STORE_SELLER_DETAILS.address,
-    cityStatePincode: liveStore.location || STORE_SELLER_DETAILS.cityStatePincode,
+    cityStatePincode: liveStore.cityStatePincode || liveStore.location || STORE_SELLER_DETAILS.cityStatePincode,
     gstin: liveStore.gstin || STORE_SELLER_DETAILS.gstin,
-    pan: STORE_SELLER_DETAILS.pan,
-    cin: STORE_SELLER_DETAILS.cin,
+    pan: liveStore.pan || STORE_SELLER_DETAILS.pan,
+    cin: liveStore.cin || STORE_SELLER_DETAILS.cin,
     supportEmail: liveStore.email || liveStore.supportEmail || STORE_SELLER_DETAILS.supportEmail,
-    supportPhone: liveStore.phone || liveStore.whatsapp || STORE_SELLER_DETAILS.supportPhone,
-    website: STORE_SELLER_DETAILS.website,
+    supportPhone: liveStore.phone || liveStore.supportPhone || liveStore.whatsapp || STORE_SELLER_DETAILS.supportPhone,
+    website: liveStore.website || STORE_SELLER_DETAILS.website,
   };
   const invoiceNumber = data.invoiceNumber || `INV-${data.orderNumber}`;
   const isPaid = data.paymentStatus === "paid" || data.paymentMethod === "razorpay";

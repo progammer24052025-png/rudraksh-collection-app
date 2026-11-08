@@ -12,6 +12,7 @@ export type ResolvedStore = typeof storeConfig & {
   announcement: string;
   isLive: boolean;
   supportEmail: string;
+  supportPhone: string;
   whatsappLink: string | null;
   mapsLink: string | null;
   instagramLink: string | null;
@@ -33,6 +34,7 @@ const buildResolved = (settings: StoreSettings | null): ResolvedStore => {
     announcement: settings?.announcement ?? "",
     isLive: Boolean(settings),
     supportEmail: merged.email || storeConfig.email,
+    supportPhone: merged.phone || storeConfig.phone,
     whatsappLink: whatsappDigits ? `https://wa.me/${whatsappDigits}` : null,
     mapsLink: merged.googleMapsUrl || null,
     instagramLink: merged.instagram || null,
