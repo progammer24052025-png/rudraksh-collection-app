@@ -538,7 +538,14 @@ export async function updateOrderStatus(
     ...(Array.isArray(current.status_history) ? current.status_history : []),
     { status, at: now, ...(extra.note ? { note: extra.note } : {}) },
   ];
-  const paymentStatus = extra.payment_status ?? current.payment_status;
+  // Auto-mark COD orders as "paid" when delivered if payment is still pending
+  const autoPaidOnDelivery =
+    status === "delivered" &&
+    current.payment_method === "cod" &&
+    current.payment_status === "pending";
+
+  const paymentStatus =
+    extra.payment_status ?? (autoPaidOnDelivery ? "paid" : current.payment_status);
 
   await updateValue(["orders", orderId], {
     order_status: status,
