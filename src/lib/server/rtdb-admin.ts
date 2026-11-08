@@ -122,18 +122,21 @@ async function accessToken(account: ServiceAccount): Promise<string> {
   return cached.token;
 }
 
-function urlFor(account: ServiceAccount, path: string): string {
+function urlFor(account: ServiceAccount, path: string, token?: string): string {
   const root = databaseUrl(account);
   if (!root) throw new Error("No Realtime Database URL configured");
   const clean = path.replace(/^\/+|\/+$/g, "");
-  return `${root}/${DB_ROOT}/${clean}.json`;
+  const base = `${root}/${DB_ROOT}/${clean}.json`;
+  return token ? `${base}?access_token=${encodeURIComponent(token)}` : base;
 }
 
 export async function adminGet<T>(path: string): Promise<T | null> {
   const account = readServiceAccount();
   if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
   const token = await accessToken(account);
-  const response = await fetch(`${urlFor(account, path)}?access_token=${encodeURIComponent(token)}`);
+  const response = await fetch(urlFor(account, path, token), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!response.ok) throw new Error(`RTDB read failed (${response.status})`);
   return (await response.json()) as T | null;
 }
@@ -142,9 +145,12 @@ export async function adminSet(path: string, value: unknown): Promise<void> {
   const account = readServiceAccount();
   if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
   const token = await accessToken(account);
-  const response = await fetch(urlFor(account, path), {
+  const response = await fetch(urlFor(account, path, token), {
     method: "PUT",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(value),
   });
   if (!response.ok) {
@@ -156,24 +162,34 @@ export async function adminPush(path: string, value: unknown): Promise<string> {
   const account = readServiceAccount();
   if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
   const token = await accessToken(account);
-  const response = await fetch(urlFor(account, path), {
+  const response = await fetch(urlFor(account, path, token), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(value),
   });
   if (!response.ok) {
     throw new Error(`RTDB push failed (${response.status}): ${(await response.text()).slice(0, 200)}`);
   }
-  return (await response.json()) as string;
+  const result = (await response.json()) as { name?: string } | string;
+  if (result && typeof result === "object" && "name" in result && typeof result.name === "string") {
+    return result.name;
+  }
+  return typeof result === "string" ? result : "";
 }
 
 export async function adminUpdate(path: string, value: Record<string, unknown>): Promise<void> {
   const account = readServiceAccount();
   if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
   const token = await accessToken(account);
-  const response = await fetch(urlFor(account, path), {
+  const response = await fetch(urlFor(account, path, token), {
     method: "PATCH",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(value),
   });
   if (!response.ok) {

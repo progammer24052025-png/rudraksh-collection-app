@@ -3,7 +3,23 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, MapPin, Banknote, Check, Shield, Loader2 } from "lucide-react";
+import {
+  ChevronLeft,
+  MapPin,
+  Banknote,
+  Check,
+  Shield,
+  Loader2,
+  FileText,
+  Download,
+  Copy,
+  Printer,
+  CheckCircle2,
+  Truck,
+  Calendar,
+  CreditCard,
+  ShoppingBag,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -27,8 +43,9 @@ import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
 import { ProgressSteps } from "@/components/kit/steps";
-import { AnimatedTicket } from "@/components/ui/ticket-confirmation-card";
+import { AnimatedTicket, ConfettiExplosion } from "@/components/ui/ticket-confirmation-card";
 import { SignInForm } from "@/components/kit/sign-in-form";
+import { TaxInvoice, type InvoiceData } from "@/components/kit/tax-invoice";
 
 function GoogleIcon() {
   return (
@@ -113,6 +130,33 @@ function loadRazorpay(): Promise<boolean> {
   });
 }
 
+type CompletedOrderSummary = {
+  orderNumber: string;
+  items: Array<{
+    productId: string;
+    name: string;
+    brand: string;
+    size: string;
+    color: string;
+    quantity: number;
+    price: number;
+    image: string;
+  }>;
+  address: Address;
+  totals: {
+    subtotal: number;
+    discount: number;
+    tax: number;
+    shipping: number;
+    total: number;
+    couponCode?: string | null;
+  };
+  paymentMethod: "cod" | "razorpay";
+  paymentStatus: "paid" | "pending";
+  paymentId?: string | null;
+  createdAt: string;
+};
+
 function CheckoutContent() {
   const { items, getCartTotal, getProduct, clearCart, setProducts, isHydrated } = useCart();
   const storeConfig = useStore();
@@ -124,6 +168,9 @@ function CheckoutContent() {
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "razorpay">("cod");
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
+  const [completedOrder, setCompletedOrder] = useState<CompletedOrderSummary | null>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [copiedOrder, setCopiedOrder] = useState(false);
 
   const [coupon, setCoupon] = useState<Coupon | null>(null);
   const [couponInput, setCouponInput] = useState("");
@@ -353,6 +400,55 @@ function CheckoutContent() {
    */
   const submitOrder = async (proof?: RazorpaySuccess) => {
     try {
+      // Snapshot items before placing order so success bill & invoice have full data
+      const orderItems = items.map((item) => {
+        const product = getProduct(item.productId);
+        return {
+          productId: item.productId,
+          name: product?.name || "Unknown",
+          brand: product?.brand_name || "",
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          price:
+            product && typeof product.sale_price === "number" && product.sale_price > 0
+              ? product.sale_price
+              : product?.price ?? 0,
+          image: product?.images?.[0] || "",
+        };
+      });
+
+      const handleSuccess = (num: string, p?: RazorpaySuccess) => {
+        const isPaid = Boolean(p);
+        setCompletedOrder({
+          orderNumber: num,
+          items: orderItems,
+          address: { ...address },
+          totals: {
+            subtotal: totals.subtotal,
+            discount: totals.discount,
+            tax: totals.tax,
+            shipping: totals.shipping,
+            total: totals.total,
+            couponCode: totals.couponCode,
+          },
+          paymentMethod,
+          paymentStatus: isPaid ? "paid" : "pending",
+          paymentId: p?.razorpay_payment_id || null,
+          createdAt: new Date().toISOString(),
+        });
+        setOrderNumber(num);
+        void logActivity(user?.uid, {
+          type: "order",
+          label: `Order ${num} placed`,
+          meta: formatPrice(totals.total),
+          href: `/track-order?order=${num}`,
+        });
+        clearCart();
+        setStep("success");
+        toast.success("Order placed successfully!");
+      };
+
       // The server re-prices the whole bag from the database and, when the
       // service account is configured, writes the order itself.
       const response = await fetch("/api/checkout", {
@@ -404,31 +500,11 @@ function CheckoutContent() {
       }
 
       if (data.secure && data.order) {
-        setOrderNumber(data.order.order_number);
-        clearCart();
-        setStep("success");
-        toast.success("Order placed successfully!");
+        handleSuccess(data.order.order_number, proof);
         return;
       }
 
       // Server priced the order but cannot write without the service account.
-      const orderItems = items.map((item) => {
-        const product = getProduct(item.productId);
-        return {
-          productId: item.productId,
-          name: product?.name || "Unknown",
-          brand: product?.brand_name || "",
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          price:
-            product && typeof product.sale_price === "number" && product.sale_price > 0
-              ? product.sale_price
-              : product?.price ?? 0,
-          image: product?.images[0] || "",
-        };
-      });
-
       const result = await createOrder({
         user_id: user?.uid ?? null,
         customer_name: address.fullName,
@@ -453,16 +529,7 @@ function CheckoutContent() {
       });
 
       if (result.ok && result.order) {
-        void logActivity(user?.uid, {
-          type: "order",
-          label: `Order ${result.order.order_number} placed`,
-          meta: formatPrice(totals.total),
-          href: "/track-order",
-        });
-        setOrderNumber(result.order.order_number);
-        clearCart();
-        setStep("success");
-        toast.success("Order placed successfully!");
+        handleSuccess(result.order.order_number, proof);
       } else {
         toast.error(result.error || "Failed to place order");
       }
@@ -574,43 +641,317 @@ function CheckoutContent() {
   };
 
   if (step === "success") {
-    return (
-      <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-12 sm:px-6">
-        <AnimatedTicket
-          ticketId={orderNumber ?? "—"}
-          amount={totals.total}
-          date={new Date()}
-          cardHolder={address.fullName || "Guest"}
-          paymentLabel={paymentMethod === "cod" ? "Cash on delivery" : "Paid online"}
-          barcodeValue={orderNumber ?? "RUDRAKSH"}
-          lines={[
-            { label: "Subtotal", value: formatPrice(totals.subtotal) },
-            ...(totals.discount > 0
-              ? [{ label: totals.couponCode ? `Discount (${totals.couponCode})` : "Discount", value: `−${formatPrice(totals.discount)}` }]
-              : []),
-            { label: "Shipping", value: totals.shipping === 0 ? "Free" : formatPrice(totals.shipping), muted: totals.shipping === 0 },
-            { label: "Total", value: formatPrice(totals.total) },
-          ]}
-          note={
-            pricing.tax.enabled
-              ? `Includes ${formatPrice(totals.tax)} ${pricing.tax.label}. We'll contact you shortly to confirm your order.`
-              : "We'll contact you shortly to confirm your order."
-          }
-        />
+    const activeAddress = completedOrder?.address || address;
+    const activeTotals = completedOrder?.totals || totals;
+    const activeItems = completedOrder?.items || [];
+    const activeMethod = completedOrder?.paymentMethod || paymentMethod;
+    const isPaid = completedOrder?.paymentStatus === "paid" || activeMethod === "razorpay";
+    const activeOrderNumber = completedOrder?.orderNumber || orderNumber || "RC";
 
-        <div className="mt-8 flex w-full max-w-sm flex-col gap-3">
-          {orderNumber && (
-            <Button asChild>
-              <Link href={`/track-order?order=${orderNumber}`}>Track this order</Link>
-            </Button>
-          )}
-          <Button variant="outline" asChild>
-            <Link href="/products">Continue Shopping</Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/account">View Orders</Link>
-          </Button>
+    const displayItems: Array<{
+      productId: string;
+      name: string;
+      brand: string;
+      size: string;
+      color: string;
+      quantity: number;
+      price: number;
+      image: string;
+    }> = activeItems.length > 0
+      ? activeItems
+      : items.map((i) => {
+          const prod = getProduct(i.productId);
+          return {
+            productId: i.productId,
+            name: prod?.name || "Item",
+            brand: prod?.brand_name || "",
+            size: i.size,
+            color: i.color,
+            quantity: i.quantity,
+            price: prod?.sale_price && prod.sale_price > 0 ? prod.sale_price : prod?.price ?? 0,
+            image: prod?.images?.[0] || "",
+          };
+        });
+
+    const invoiceData: InvoiceData = {
+      orderNumber: activeOrderNumber,
+      invoiceNumber: `INV-${activeOrderNumber}`,
+      date: completedOrder?.createdAt || new Date(),
+      customerName: activeAddress.fullName || "Valued Customer",
+      phone: activeAddress.phone,
+      email: activeAddress.email,
+      address: activeAddress.address,
+      city: activeAddress.city,
+      state: activeAddress.state,
+      pincode: activeAddress.pincode,
+      items: displayItems.map((i) => ({
+        name: i.name,
+        brand: i.brand,
+        size: i.size,
+        color: i.color,
+        quantity: i.quantity,
+        price: i.price,
+        image: i.image,
+      })),
+      subtotal: activeTotals.subtotal,
+      discount: activeTotals.discount,
+      couponCode: activeTotals.couponCode,
+      tax: activeTotals.tax,
+      shipping: activeTotals.shipping,
+      total: activeTotals.total,
+      paymentMethod: activeMethod,
+      paymentStatus: isPaid ? "paid" : "pending",
+      paymentId: completedOrder?.paymentId ?? null,
+    };
+
+    const copyOrderNumber = () => {
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(activeOrderNumber);
+        setCopiedOrder(true);
+        toast.success("Order ID copied to clipboard!");
+        setTimeout(() => setCopiedOrder(false), 2000);
+      }
+    };
+
+    return (
+      <div className="relative min-h-[70vh] py-10 px-4 sm:px-6 lg:px-8">
+        <ConfettiExplosion />
+
+        <div className="mx-auto max-w-4xl space-y-8">
+          {/* Main Success Announcement Card */}
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-10 text-center shadow-md relative overflow-hidden">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+              <CheckCircle2 className="h-10 w-10 animate-in zoom-in-75 duration-500" />
+            </div>
+
+            <h1 className="mt-4 font-serif text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Order Placed Successfully!
+            </h1>
+            <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-lg mx-auto">
+              Thank you, <span className="font-semibold text-foreground">{activeAddress.fullName}</span>! We&apos;ve received your order and are preparing it with care.
+            </p>
+
+            {/* Order Number & Meta Pills */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-2 text-xs sm:text-sm font-medium">
+                <span className="text-muted-foreground">Order ID:</span>
+                <span className="font-mono font-bold text-foreground">{activeOrderNumber}</span>
+                <button
+                  type="button"
+                  onClick={copyOrderNumber}
+                  className="ml-1 text-muted-foreground hover:text-foreground"
+                  title="Copy Order ID"
+                >
+                  {copiedOrder ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-2 text-xs sm:text-sm">
+                <Truck className="h-4 w-4 text-primary" />
+                <span>Estimated Delivery: <strong>3–5 Business Days</strong></span>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-2 text-xs sm:text-sm">
+                <Banknote className="h-4 w-4 text-primary" />
+                <span>Payment: <strong>{activeMethod === "cod" ? "Cash on Delivery" : "Paid Online"}</strong></span>
+                <span className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
+                  isPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                }`}>
+                  {isPaid ? "Paid" : "Pending on Delivery"}
+                </span>
+              </div>
+            </div>
+
+            {/* Prominent Action Buttons */}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              <Button
+                onClick={() => setShowInvoiceModal(true)}
+                className="gap-2 h-11 px-5 font-medium shadow-sm"
+              >
+                <FileText className="h-4 w-4" />
+                {isPaid ? "Download Tax Invoice" : "Download Order Receipt (Bill)"}
+              </Button>
+
+              <Button asChild variant="outline" className="gap-2 h-11 px-5 font-medium">
+                <Link href={`/track-order?order=${activeOrderNumber}`}>
+                  <Truck className="h-4 w-4" /> Track Order Status
+                </Link>
+              </Button>
+
+              <Button asChild variant="ghost" className="h-11 px-5">
+                <Link href="/products">Continue Shopping</Link>
+              </Button>
+            </div>
+
+            {!isPaid && (
+              <p className="mt-4 text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                <Shield className="h-3.5 w-3.5 text-amber-600" />
+                <span>Official Tax Invoice will be unlocked once order is marked Paid upon delivery.</span>
+              </p>
+            )}
+          </div>
+
+          {/* Amazon-style Formatted Bill & Shipment Details */}
+          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+            <div className="border-b border-border bg-muted/30 px-6 py-4 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-serif text-lg font-semibold text-foreground">Order Details & Bill</h2>
+                <p className="text-xs text-muted-foreground">Order placed on {new Date().toLocaleDateString("en-IN", { dateStyle: "long" })}</p>
+              </div>
+              <div className="mt-2 sm:mt-0 text-right">
+                <span className="text-xs text-muted-foreground block">Order Total</span>
+                <span className="text-xl font-bold font-mono text-foreground">{formatPrice(activeTotals.total)}</span>
+              </div>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-8">
+              {/* Delivery & Payment Address Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-6 border-b border-border">
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                    <MapPin className="h-4 w-4 text-primary" /> Delivery Address
+                  </div>
+                  <p className="font-semibold text-foreground text-sm">{activeAddress.fullName}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {activeAddress.address}<br />
+                    {activeAddress.city}, {activeAddress.state} — {activeAddress.pincode}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    <span className="font-medium text-foreground">Phone:</span> {activeAddress.phone}
+                  </p>
+                  {activeAddress.email && (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Email:</span> {activeAddress.email}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                    <CreditCard className="h-4 w-4 text-primary" /> Payment & Billing
+                  </div>
+                  <p className="font-semibold text-foreground text-sm">
+                    {activeMethod === "cod" ? "Cash on Delivery" : "Online Payment (Razorpay)"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Status:{" "}
+                    <span className={`font-semibold ${isPaid ? "text-emerald-600" : "text-amber-600"}`}>
+                      {isPaid ? "Paid in Full" : "Payment Pending (To be paid on delivery)"}
+                    </span>
+                  </p>
+                  {completedOrder?.paymentId && (
+                    <p className="text-xs font-mono text-muted-foreground mt-1">
+                      Ref: {completedOrder.paymentId}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Billed by: <span className="font-medium text-foreground">Rudraksh Collection</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
+                  Items Ordered ({invoiceData.items.reduce((s, i) => s + i.quantity, 0)})
+                </h3>
+
+                <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+                  {displayItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-4 p-4 hover:bg-muted/10 transition-colors">
+                      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-muted border border-border">
+                        {item.image ? (
+                          <Image src={item.image} alt={item.name} fill className="object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                            <ShoppingBag className="h-6 w-6" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-foreground line-clamp-1">{item.name}</p>
+                        {item.brand && <p className="text-xs text-muted-foreground">{item.brand}</p>}
+                        <div className="flex items-center gap-2 mt-1">
+                          {item.size && (
+                            <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              Size: {item.size}
+                            </span>
+                          )}
+                          {item.color && (
+                            <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              Color: {item.color}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-muted-foreground">{item.quantity} × {formatPrice(item.price)}</p>
+                        <p className="font-semibold font-mono text-sm sm:text-base text-foreground mt-0.5">
+                          {formatPrice(item.price * item.quantity)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formatted Bill Breakdown */}
+              <div className="rounded-xl border border-border bg-muted/10 p-5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                  Bill Summary
+                </h3>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Items Subtotal</span>
+                    <span className="font-mono text-foreground">{formatPrice(activeTotals.subtotal)}</span>
+                  </div>
+
+                  {activeTotals.discount > 0 && (
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
+                      <span>Promotion / Coupon Discount {activeTotals.couponCode ? `(${activeTotals.couponCode})` : ""}</span>
+                      <span className="font-mono">−{formatPrice(activeTotals.discount)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Delivery Charges</span>
+                    <span className="font-mono text-foreground">
+                      {activeTotals.shipping === 0 ? <strong className="text-emerald-600">FREE</strong> : formatPrice(activeTotals.shipping)}
+                    </span>
+                  </div>
+
+                  {activeTotals.tax > 0 && (
+                    <div className="flex justify-between text-muted-foreground text-xs">
+                      <span>Estimated GST (5% Included)</span>
+                      <span className="font-mono">{formatPrice(activeTotals.tax)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between border-t border-border pt-3 text-base sm:text-lg font-bold text-foreground">
+                    <span>Order Total</span>
+                    <span className="font-mono">{formatPrice(activeTotals.total)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Modal for viewing & printing Tax Invoice */}
+        {showInvoiceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+            <div className="relative w-full max-w-4xl my-8">
+              <TaxInvoice
+                data={invoiceData}
+                onClose={() => setShowInvoiceModal(false)}
+                showPrintButton={true}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

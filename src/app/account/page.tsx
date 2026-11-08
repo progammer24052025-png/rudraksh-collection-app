@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Edit2,
+  FileText,
   Heart,
   Loader2,
   LogOut,
@@ -540,9 +541,16 @@ function OrdersTab() {
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-semibold">{formatPrice(order.total)}</p>
-                  <Button asChild variant="ghost" size="sm" className="mt-1 text-xs">
-                    <Link href={`/track-order?order=${order.order_number}`}>Track order</Link>
-                  </Button>
+                  <div className="mt-1 flex items-center justify-end gap-2">
+                    <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+                      <Link href={`/invoice?order=${order.order_number}`}>
+                        <FileText className="h-3.5 w-3.5" /> Invoice
+                      </Link>
+                    </Button>
+                    <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                      <Link href={`/track-order?order=${order.order_number}`}>Track order</Link>
+                    </Button>
+                  </div>
                 </div>
               </div>
 

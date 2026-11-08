@@ -310,9 +310,13 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-    return Response.json(
-      { ok: false, secure: true, totals, error: "We could not record the order. Please try again." },
-      { status: 500 },
-    );
+    console.warn("Secure checkout write failed, falling back to client write:", error);
+    return Response.json({
+      ok: true,
+      secure: false,
+      totals,
+      order: null,
+      payment: null,
+    });
   }
 }

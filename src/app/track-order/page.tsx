@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, Loader2, PackageSearch, Search } from "lucide-react";
+import { Check, FileText, Loader2, PackageSearch, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -144,6 +144,11 @@ function TrackOrderInner() {
                 {statusLabel(result.order_status).label}
               </span>
               <p className="mt-1 text-sm font-semibold">{formatPrice(result.total)}</p>
+              <Button asChild variant="outline" size="sm" className="mt-2 text-xs gap-1.5 h-8">
+                <Link href={`/invoice?order=${result.order_number}`}>
+                  <FileText className="h-3.5 w-3.5" /> Download Invoice
+                </Link>
+              </Button>
             </div>
           </div>
 

@@ -276,5 +276,5 @@ const AnimatedTicket = React.forwardRef<HTMLDivElement, TicketProps>(
 
 AnimatedTicket.displayName = "AnimatedTicket";
 
-export { AnimatedTicket };
+export { AnimatedTicket, ConfettiExplosion };
 export default AnimatedTicket;
