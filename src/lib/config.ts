@@ -106,8 +106,26 @@ export const collectionImages: Record<string, string> = {
 export type CollectionSlug = (typeof collections)[number]["slug"];
 export type BrandSlug = (typeof brands)[number]["slug"];
 
-export const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:3000"
-    : "https://rudraksh-collection-app-beta.vercel.app");
+function resolveSiteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || "";
+  const urls = raw.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
+
+  if (typeof window !== "undefined") {
+    const origin = window.location.origin;
+    if (urls.includes(origin) || origin.includes("localhost") || origin.includes("127.0.0.1")) {
+      return origin;
+    }
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    const local = urls.find((u) => u.includes("localhost") || u.includes("127.0.0.1"));
+    return local || "http://localhost:3000";
+  }
+
+  const prod = urls.find((u) => !u.includes("localhost") && !u.includes("127.0.0.1"));
+  if (prod) return prod;
+
+  return urls[0] || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://rudraksh-collection-app-beta.vercel.app");
+}
+
+export const siteUrl = resolveSiteUrl();
