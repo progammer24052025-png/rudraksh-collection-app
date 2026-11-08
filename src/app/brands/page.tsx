@@ -5,33 +5,39 @@ import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { brands as fallbackBrands } from "@/lib/config";
-import { subscribeBrands } from "@/lib/firebase";
+import { fetchBrands } from "@/lib/firebase";
 import type { Brand } from "@/lib/types";
 import { motion } from "framer-motion";
 import { BrandLogoBadge } from "@/components/brand-logo-badge";
 
+const FALLBACK: Brand[] = fallbackBrands.map((brand) => ({
+  id: brand.slug,
+  slug: brand.slug,
+  name: brand.name,
+  status: "active",
+  created_at: "",
+}));
+
 export default function BrandsPage() {
-  const [brandsList, setBrandsList] = useState<Brand[]>([]);
+  const [brands, setBrands] = useState<Brand[]>(FALLBACK);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    return subscribeBrands((list) => {
-      const active = list.filter((b) => b.status !== "hidden");
-      if (active.length > 0) {
-        setBrandsList(active);
-      }
-    });
+    let cancelled = false;
+    fetchBrands()
+      .then((list) => {
+        if (cancelled) return;
+        const visible = list.filter((brand) => brand.status !== "hidden");
+        if (visible.length) setBrands(visible);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  const displayBrands =
-    brandsList.length > 0
-      ? brandsList
-      : fallbackBrands.map((b) => ({
-          id: b.slug,
-          name: b.name,
-          slug: b.slug,
-          status: "active" as const,
-          created_at: "",
-        }));
 
   return (
     <>
@@ -48,13 +54,13 @@ export default function BrandsPage() {
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {displayBrands.map((brand, idx) => (
+            {brands.map((brand, idx) => (
               <motion.div
-                key={brand.slug}
+                key={brand.id}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: idx * 0.05, duration: 0.4 }}
+                transition={{ delay: Math.min(idx, 6) * 0.05, duration: 0.4 }}
               >
                 <Link
                   href={`/brands/${brand.slug}`}
@@ -70,12 +76,27 @@ export default function BrandsPage() {
                   <span className="font-serif text-xl font-medium transition-colors group-hover:text-primary">
                     {brand.name}
                   </span>
-                  <span className="mt-2 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+                  {(brand.category_names ?? []).length ? (
+                    <span className="mt-3 flex flex-wrap justify-center gap-1">
+                      {(brand.category_names ?? []).slice(0, 3).map((category) => (
+                        <span
+                          key={category}
+                          className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-foreground/70"
+                        >
+                          {category}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                  <span className="mt-3 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
                     View Collection →
                   </span>
                 </Link>
               </motion.div>
             ))}
+            {!ready && brands.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Loading brands…</p>
+            ) : null}
           </div>
         </main>
         <Footer />

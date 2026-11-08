@@ -16,6 +16,15 @@ export interface Brand {
   description?: string | null;
   status: "active" | "hidden";
   sort_order?: number;
+  /**
+   * Categories this brand sells in. A brand may sit in several — detected from
+   * the bio, then editable by hand in Admin → Catalog → Brands.
+   */
+  category_slugs?: string[];
+  category_names?: string[];
+  /** `auto` = filled by the classifier, `manual` = chosen by an admin. */
+  category_source?: "auto" | "manual" | null;
+  category_updated_at?: string;
   created_at: string;
 }
 
@@ -23,11 +32,19 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  /**
+   * Departments this category hangs under. Empty/undefined means top level.
+   * "Everyday Essentials" can sit under Men, Women and Kids at once.
+   */
+  parent_slugs?: string[];
+  /** Legacy single-parent value written by older records. */
+  parent_slug?: string | null;
   image?: string | null;
   description?: string | null;
   status: "active" | "hidden";
   sort_order?: number;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ProductColor {

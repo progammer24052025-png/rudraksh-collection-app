@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag, User, Search, Menu, X, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -9,6 +10,9 @@ import { useCart } from "@/lib/cart-context";
 import { useStore } from "@/lib/store-context";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import { fetchCategories } from "@/lib/firebase";
+import { buildSeedCategories, childrenOf, normaliseCategory, topLevelCategories } from "@/lib/categories";
+import type { Category } from "@/lib/types";
 
 const NAV_LINKS = [
   { label: "Shop", href: "/products" },
@@ -26,8 +30,33 @@ export function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [scrolled, setScrolled] = useState(false);
+  const [categories, setCategories] = useState<Category[] | null>(null);
   const router = useRouter();
   const cartCount = isHydrated ? getCartCount() : 0;
+
+  // Categories are only fetched once the search panel is actually opened.
+  useEffect(() => {
+    if (!isSearchOpen || categories) return;
+    let cancelled = false;
+    fetchCategories()
+      .then((list) => {
+        if (cancelled) return;
+        setCategories(list.length ? list.map(normaliseCategory) : buildSeedCategories());
+      })
+      .catch(() => {
+        if (!cancelled) setCategories(buildSeedCategories());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSearchOpen, categories]);
+
+  const categoryChips = useMemo(() => {
+    if (!categories) return [];
+    const roots = topLevelCategories(categories);
+    const children = roots.flatMap((root) => childrenOf(categories, root.slug));
+    return [...roots, ...children].slice(0, 10);
+  }, [categories]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -123,25 +152,61 @@ export function Header() {
         </div>
       </div>
 
-      {isSearchOpen && (
-        <div className="border-t border-border bg-background/95 backdrop-blur px-4 py-3">
-          <form onSubmit={handleSearch} className="mx-auto flex max-w-2xl items-center gap-2">
-            <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search products, brands..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
-              autoFocus
-            />
-            <Button type="submit" size="sm">Search</Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => setIsSearchOpen(false)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </form>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {isSearchOpen && (
+          <motion.div
+            key="search-panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden border-t border-border bg-background/95 backdrop-blur"
+          >
+            <div className="px-4 py-3">
+              <form onSubmit={handleSearch} className="mx-auto flex max-w-2xl items-center gap-2">
+                <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search products, brands..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
+                  autoFocus
+                />
+                <Button type="submit" size="sm">Search</Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => setIsSearchOpen(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </form>
+
+              {categoryChips.length ? (
+                <div className="mx-auto mt-3 flex max-w-2xl flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Categories
+                  </span>
+                  {categoryChips.map((chip, index) => (
+                    <motion.button
+                      key={chip.slug}
+                      type="button"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, delay: index * 0.03 }}
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setSearchQuery("");
+                        router.push(`/products?category=${chip.slug}`);
+                      }}
+                      className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-sage hover:text-foreground"
+                    >
+                      {chip.name}
+                    </motion.button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }
