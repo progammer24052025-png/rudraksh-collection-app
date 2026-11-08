@@ -107,4 +107,7 @@ export type CollectionSlug = (typeof collections)[number]["slug"];
 export type BrandSlug = (typeof brands)[number]["slug"];
 
 export const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://rudrakshcollection.in";
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : "https://rudraksh-collection-app-beta.vercel.app");
