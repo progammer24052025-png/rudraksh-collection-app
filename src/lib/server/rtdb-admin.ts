@@ -20,10 +20,11 @@ type ServiceAccount = {
 };
 
 function readServiceAccount(): ServiceAccount | null {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  const raw = (process.env.FIREBASE_SERVICE_ACCOUNT ?? "").trim();
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as ServiceAccount;
+    const text = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf-8");
+    const parsed = JSON.parse(text) as ServiceAccount;
     if (!parsed.client_email || !parsed.private_key) return null;
     return parsed;
   } catch {

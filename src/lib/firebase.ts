@@ -44,7 +44,6 @@ import {
   type Database,
 } from "firebase/database";
 
-import { adminEmails, defaultAdminEmail } from "./config";
 import type {
   ActivityEvent,
   Address,
@@ -105,18 +104,18 @@ const firebaseConfig = {
 /** Root node inside the Realtime Database reserved for this store. */
 export const DB_ROOT = cleanDbRoot(process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT);
 
-/** Emails allowed to bootstrap or access store owner/admin accounts. */
-export const DEFAULT_ADMIN_EMAILS = [...adminEmails];
-
-export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || defaultAdminEmail;
+/** Admin emails configured via environment variables */
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "";
 
 export const getAdminEmails = (): string[] => {
   const envList = `${process.env.ADMIN_EMAIL || ""} ${process.env.NEXT_PUBLIC_ADMIN_EMAIL || ""}`
     .split(/[\s,]+/)
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  return Array.from(new Set([...envList, ...DEFAULT_ADMIN_EMAILS.map((e) => e.toLowerCase())]));
+  return Array.from(new Set(envList));
 };
+
+export const DEFAULT_ADMIN_EMAILS = getAdminEmails();
 
 export const isAllowedAdminEmail = (email?: string | null): boolean => {
   if (!email) return false;
