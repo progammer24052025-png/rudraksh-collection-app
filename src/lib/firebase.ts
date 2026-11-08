@@ -44,6 +44,7 @@ import {
   type Database,
 } from "firebase/database";
 
+import { adminEmails, defaultAdminEmail } from "./config";
 import type {
   ActivityEvent,
   Address,
@@ -62,35 +63,56 @@ import type {
   UserProfile,
 } from "./types";
 
-const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "";
+function cleanDatabaseUrl(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  let url = raw.trim().replace(/^["']|["']$/g, "").trim();
+  if (!url) return undefined;
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  try {
+    const parsed = new URL(url);
+    // Realtime Database URL MUST only be the origin (e.g. https://xyz-default-rtdb.firebaseio.com)
+    return parsed.origin;
+  } catch {
+    return url.replace(/\/+$/, "").split("/").slice(0, 3).join("/");
+  }
+}
+
+function cleanDbRoot(raw?: string | null): string {
+  if (!raw) return "rudraksh";
+  const cleaned = raw.trim().replace(/^["']|["']$/g, "").replace(/^\/+|\/+$/g, "").trim();
+  return cleaned || "rudraksh";
+}
+
+const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "").trim().replace(/^["']|["']$/g, "");
+
+const databaseUrl = cleanDatabaseUrl(
+  process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+    (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined),
+);
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  apiKey: (process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "").trim().replace(/^["']|["']$/g, ""),
+  authDomain: (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "").trim().replace(/^["']|["']$/g, ""),
   projectId,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  databaseURL:
-    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
-    (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined),
+  storageBucket: (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "").trim().replace(/^["']|["']$/g, ""),
+  messagingSenderId: (process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "").trim().replace(/^["']|["']$/g, ""),
+  appId: (process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "").trim().replace(/^["']|["']$/g, ""),
+  databaseURL: databaseUrl,
 };
 
 /** Root node inside the Realtime Database reserved for this store. */
-export const DB_ROOT = process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh";
+export const DB_ROOT = cleanDbRoot(process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT);
 
 /** Emails allowed to bootstrap or access store owner/admin accounts. */
-export const DEFAULT_ADMIN_EMAILS = [
-  "admin@rudrakshcollection.in",
-  "progammer.24052025@gmail.com",
-  "rudrakshcollection22309@gmail.com",
-];
+export const DEFAULT_ADMIN_EMAILS = [...adminEmails];
 
-export const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || DEFAULT_ADMIN_EMAILS[0];
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || defaultAdminEmail;
 
 export const getAdminEmails = (): string[] => {
-  const envList = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "")
-    .split(",")
+  const envList = `${process.env.ADMIN_EMAIL || ""} ${process.env.NEXT_PUBLIC_ADMIN_EMAIL || ""}`
+    .split(/[\s,]+/)
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
   return Array.from(new Set([...envList, ...DEFAULT_ADMIN_EMAILS.map((e) => e.toLowerCase())]));
@@ -103,9 +125,9 @@ export const isAllowedAdminEmail = (email?: string | null): boolean => {
 
 export const isFirebaseConfigured = (): boolean =>
   Boolean(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+    firebaseConfig.apiKey &&
+      firebaseConfig.authDomain &&
+      firebaseConfig.projectId &&
       firebaseConfig.databaseURL,
   );
 
@@ -133,16 +155,27 @@ export function getFirebaseDb(): Database {
   if (typeof window === "undefined") {
     throw new Error("Firebase Realtime Database is only available in the browser");
   }
-  if (!cachedDb) cachedDb = getDatabase(appInstance());
+  if (!cachedDb) {
+    const app = appInstance();
+    cachedDb = databaseUrl ? getDatabase(app, databaseUrl) : getDatabase(app);
+  }
   return cachedDb;
 }
 
 /** Build a Realtime Database reference path, e.g. rtdbRef("products", id). */
-export const rtdbRef = (...segments: string[]) =>
-  ref(getFirebaseDb(), [DB_ROOT, ...segments.filter(Boolean)].join("/"));
+export const rtdbRef = (...segments: string[]) => {
+  const cleanSegments = [DB_ROOT, ...segments]
+    .map((s) => (s ?? "").toString().trim().replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  return ref(getFirebaseDb(), cleanSegments.join("/"));
+};
 
-export const rtdbPath = (...segments: string[]) =>
-  [DB_ROOT, ...segments.filter(Boolean)].join("/");
+export const rtdbPath = (...segments: string[]) => {
+  const cleanSegments = [DB_ROOT, ...segments]
+    .map((s) => (s ?? "").toString().trim().replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  return cleanSegments.join("/");
+};
 
 // ── Generic Realtime Database helpers ────────────────────────
 export async function readValue<T>(segments: string[]): Promise<T | null> {

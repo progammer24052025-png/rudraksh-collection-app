@@ -106,5 +106,14 @@ export const collectionImages: Record<string, string> = {
 export type CollectionSlug = (typeof collections)[number]["slug"];
 export type BrandSlug = (typeof brands)[number]["slug"];
 
+/** Store owner and admin emails allowed to manage the store */
+export const adminEmails = [
+  "admin@rudrakshcollection.in",
+  "progammer.24052025@gmail.com",
+  "rudrakshcollection22309@gmail.com",
+] as const;
+
+export const defaultAdminEmail = adminEmails[0];
+
 export const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL || "https://rudrakshcollection.in";
