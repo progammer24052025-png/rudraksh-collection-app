@@ -84,25 +84,32 @@ function cleanDbRoot(raw?: string | null): string {
   return cleaned || "rudraksh";
 }
 
-const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "").trim().replace(/^["']|["']$/g, "");
+const projectId = (
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+  ""
+).trim().replace(/^["']|["']$/g, "");
 
 const databaseUrl = cleanDatabaseUrl(
+  process.env.FIREBASE_DATABASE_URL ||
   process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
     (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined),
 );
 
 const firebaseConfig = {
-  apiKey: (process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "").trim().replace(/^["']|["']$/g, ""),
-  authDomain: (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "").trim().replace(/^["']|["']$/g, ""),
+  apiKey: (process.env.FIREBASE_API_KEY ?? process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "").trim().replace(/^["']|["']$/g, ""),
+  authDomain: (process.env.FIREBASE_AUTH_DOMAIN ?? process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "").trim().replace(/^["']|["']$/g, ""),
   projectId,
-  storageBucket: (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "").trim().replace(/^["']|["']$/g, ""),
-  messagingSenderId: (process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "").trim().replace(/^["']|["']$/g, ""),
-  appId: (process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "").trim().replace(/^["']|["']$/g, ""),
+  storageBucket: (process.env.FIREBASE_STORAGE_BUCKET ?? process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "").trim().replace(/^["']|["']$/g, ""),
+  messagingSenderId: (process.env.FIREBASE_MESSAGING_SENDER_ID ?? process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "").trim().replace(/^["']|["']$/g, ""),
+  appId: (process.env.FIREBASE_APP_ID ?? process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "").trim().replace(/^["']|["']$/g, ""),
   databaseURL: databaseUrl,
 };
 
 /** Root node inside the Realtime Database reserved for this store. */
-export const DB_ROOT = cleanDbRoot(process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT);
+export const DB_ROOT = cleanDbRoot(
+  process.env.FIREBASE_DB_ROOT || process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT
+);
 
 /** Admin emails configured via environment variables */
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "";

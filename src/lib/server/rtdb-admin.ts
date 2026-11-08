@@ -10,7 +10,8 @@
  * is surfaced in admin.
  */
 
-export const DB_ROOT = process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh";
+export const DB_ROOT =
+  process.env.FIREBASE_DB_ROOT || process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh";
 
 type ServiceAccount = {
   project_id?: string;
@@ -36,10 +37,10 @@ function readServiceAccount(): ServiceAccount | null {
 export const isSecureCheckout = (): boolean => readServiceAccount() !== null;
 
 function databaseUrl(account: ServiceAccount | null): string {
-  const explicit = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
+  const explicit = process.env.FIREBASE_DATABASE_URL || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
   if (explicit) return explicit.replace(/\/$/, "");
   if (account?.databaseURL) return account.databaseURL.replace(/\/$/, "");
-  const projectId = account?.project_id || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const projectId = account?.project_id || process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   return projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : "";
 }
 

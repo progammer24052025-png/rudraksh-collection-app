@@ -90,7 +90,7 @@ function FirebaseNotConfigured() {
       <h1 className="mt-6 font-serif text-2xl font-bold">Sign-in is not configured</h1>
       <p className="mt-3 text-muted-foreground">
         Firebase credentials are missing from this deployment. Add the{" "}
-        <code className="rounded bg-muted px-1">NEXT_PUBLIC_FIREBASE_*</code> environment variables
+        <code className="rounded bg-muted px-1">FIREBASE_*</code> environment variables
         and rebuild.
       </p>
       <Button asChild className="mt-6">

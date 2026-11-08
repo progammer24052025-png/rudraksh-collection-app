@@ -35,9 +35,19 @@ export const dynamic = "force-dynamic";
 // `node:tls` powers the SMTP connection, so this route must not run on Edge.
 export const runtime = "nodejs";
 
-const DB_URL = (process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "").replace(/\/$/, "");
-const DB_ROOT = process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh";
-const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "";
+const DB_URL = (
+  process.env.FIREBASE_DATABASE_URL ||
+  process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+  ""
+).replace(/\/$/, "");
+const DB_ROOT =
+  process.env.FIREBASE_DB_ROOT ||
+  process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT ||
+  "rudraksh";
+const API_KEY =
+  process.env.FIREBASE_API_KEY ||
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+  "";
 
 const ORDER_STATUSES: OrderStatus[] = [
   "placed",

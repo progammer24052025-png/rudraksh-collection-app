@@ -107,7 +107,7 @@ export type CollectionSlug = (typeof collections)[number]["slug"];
 export type BrandSlug = (typeof brands)[number]["slug"];
 
 function resolveSiteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL || "";
+  const raw = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
   const urls = raw.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
 
   if (typeof window !== "undefined") {

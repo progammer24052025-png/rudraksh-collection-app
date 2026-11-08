@@ -44,9 +44,9 @@ export type PricedCartResult =
   | { ok: false; status: number; error: string; totals?: Totals };
 
 export function databaseUrl(): string {
-  const explicit = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
+  const explicit = process.env.FIREBASE_DATABASE_URL || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
   if (explicit) return explicit.replace(/\/$/, "");
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   return projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : "";
 }
 
