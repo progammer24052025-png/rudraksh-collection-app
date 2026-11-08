@@ -77,6 +77,7 @@ export default function AdminProductEditPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [inheritedFrom, setInheritedFrom] = useState<string | null>(null);
   const [newSize, setNewSize] = useState("");
   const [newColorName, setNewColorName] = useState("");
   const [newColorHex, setNewColorHex] = useState("#000000");
@@ -243,7 +244,25 @@ export default function AdminProductEditPage() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>Brand</Label>
-              <Select value={form.brand_id} onValueChange={(value) => setForm({ ...form, brand_id: value })}>
+              <Select
+                value={form.brand_id}
+                onValueChange={(value) => {
+                  // A blank category inherits the brand's primary category.
+                  const brand = brands.find((item) => item.id === value);
+                  const inheritedSlug = brand?.category_slugs?.[0];
+                  const inherited = inheritedSlug
+                    ? categories.find(
+                        (category) => category.slug === inheritedSlug || category.id === inheritedSlug,
+                      )
+                    : undefined;
+                  if (!form.category_id && inherited) {
+                    setInheritedFrom(inherited.name);
+                    setForm({ ...form, brand_id: value, category_id: inherited.id });
+                    return;
+                  }
+                  setForm({ ...form, brand_id: value });
+                }}
+              >
                 <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
                 <SelectContent>
                   {brands.map((brand) => (
@@ -253,8 +272,19 @@ export default function AdminProductEditPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Collection</Label>
-              <Select value={form.category_id} onValueChange={(value) => setForm({ ...form, category_id: value })}>
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>Collection</Label>
+                {inheritedFrom ? (
+                  <span className="text-[11px] text-muted-foreground">from {inheritedFrom}</span>
+                ) : null}
+              </div>
+              <Select
+                value={form.category_id}
+                onValueChange={(value) => {
+                  setInheritedFrom(null);
+                  setForm({ ...form, category_id: value });
+                }}
+              >
                 <SelectTrigger><SelectValue placeholder="Select collection" /></SelectTrigger>
                 <SelectContent>
                   {categories.map((category) => (

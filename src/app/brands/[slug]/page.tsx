@@ -15,20 +15,19 @@ import { BrandLogoBadge } from "@/components/brand-logo-badge";
 export default function BrandPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const [products, setProducts] = useState<Product[]>([]);
+  const [brandRecord, setBrandRecord] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
-  const [liveBrand, setLiveBrand] = useState<Brand | null>(null);
 
   useEffect(() => {
     return subscribeBrands((list) => {
       const match = list.find((b) => b.slug === slug || b.id === slug);
-      if (match) setLiveBrand(match);
+      if (match) setBrandRecord(match);
     });
   }, [slug]);
-
   const fallback = fallbackBrands.find((b) => b.slug === slug);
-  const brandName = liveBrand?.name || fallback?.name || slug.replace(/-/g, " ");
-  const brandDescription = liveBrand?.description || null;
-  const brandLogo = liveBrand?.logo || null;
+  const brandName = brandRecord?.name || fallback?.name || slug.replace(/-/g, " ");
+  const brandDescription = brandRecord?.description ?? null;
+  const brandLogo = brandRecord?.logo ?? null;
 
   useEffect(() => {
     setLoading(true);
@@ -63,6 +62,18 @@ export default function BrandPage({ params }: { params: Promise<{ slug: string }
                   {brandDescription}
                 </p>
               )}
+              {(brandRecord?.category_names ?? []).length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {(brandRecord?.category_names ?? []).map((category) => (
+                    <span
+                      key={category}
+                      className="rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground/75"
+                    >
+                      {category}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <p className="mt-1.5 text-xs text-muted-foreground/80">
                 {loading ? "Loading..." : `${products.length} product${products.length !== 1 ? "s" : ""}`}
               </p>

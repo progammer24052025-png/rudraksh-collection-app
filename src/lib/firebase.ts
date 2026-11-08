@@ -233,7 +233,9 @@ export async function saveBrand(brand: Partial<Brand> & { name: string }): Promi
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
   const id = brand.id?.trim() || slug || `brand-${Date.now().toString(36)}`;
+  const existing = await readValue<Brand>(["brands", id]);
   const record: Brand = {
+    ...(existing ?? ({} as Brand)),
     id,
     name: brand.name.trim(),
     slug: slug || id,
@@ -241,7 +243,11 @@ export async function saveBrand(brand: Partial<Brand> & { name: string }): Promi
     description: brand.description?.trim() || null,
     status: brand.status ?? "active",
     sort_order: typeof brand.sort_order === "number" ? brand.sort_order : 0,
-    created_at: brand.created_at ?? now,
+    category_slugs: brand.category_slugs ?? existing?.category_slugs ?? [],
+    category_names: brand.category_names ?? existing?.category_names ?? [],
+    category_source: brand.category_source ?? existing?.category_source ?? null,
+    category_updated_at: brand.category_updated_at ?? existing?.category_updated_at,
+    created_at: brand.created_at ?? existing?.created_at ?? now,
   };
   await writeValue(["brands", id], record);
   return record;
@@ -258,36 +264,47 @@ export const subscribeCategories = (callback: (categories: Category[]) => void) 
     ),
   );
 
+export const fetchProducts = async (): Promise<Product[]> => toList<Product>(await readValue(["products"]));
+
 export const fetchCategories = async (): Promise<Category[]> =>
   toList<Category>(await readValue(["categories"])).sort(
     (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name),
   );
 
-export async function saveCategory(category: Partial<Category> & { name: string }): Promise<Category> {
-  const now = new Date().toISOString();
+/**
+ * Categories are keyed by `id` (which defaults to the slug) so product
+ * records keep resolving. Unspecified fields are preserved, which lets the
+ * admin dialog save a partial record without wiping the cover photo or the
+ * department links it hangs under.
+ */
+export async function saveCategory(
+  category: Partial<Category> & { name: string },
+): Promise<void> {
   const slug = (category.slug || category.name)
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-  const id = category.id?.trim() || slug || `cat-${Date.now().toString(36)}`;
-  const record: Category = {
+  const id = (category.id || slug).trim();
+  if (!id) throw new Error("A category id is required");
+  const now = new Date().toISOString();
+  const existing = await readValue<Category>(["categories", id]);
+  await writeValue(["categories", id], {
+    ...(existing ?? {}),
+    ...category,
     id,
-    name: category.name.trim(),
     slug: slug || id,
-    image: category.image?.trim() || null,
-    description: category.description?.trim() || null,
-    status: category.status ?? "active",
-    sort_order: typeof category.sort_order === "number" ? category.sort_order : 0,
-    created_at: category.created_at ?? now,
-  };
-  await writeValue(["categories", id], record);
-  return record;
+    name: category.name.trim(),
+    parent_slugs: category.parent_slugs ?? existing?.parent_slugs ?? [],
+    parent_slug: category.parent_slug ?? existing?.parent_slug ?? null,
+    updated_at: now,
+    created_at: existing?.created_at || category.created_at || now,
+  });
 }
 
-export const deleteCategory = (id: string) => removeValue(["categories", id]);
+/** Removes the category only — products keep their now-orphaned category slug. */
+export const deleteCategory = (idOrSlug: string) => removeValue(["categories", idOrSlug]);
 
-export const fetchProducts = async (): Promise<Product[]> => toList<Product>(await readValue(["products"]));
 
 export const fetchProductBySlug = async (slug: string): Promise<Product | null> => {
   const products = await fetchProducts();

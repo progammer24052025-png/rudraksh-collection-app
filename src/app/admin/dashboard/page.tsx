@@ -14,6 +14,8 @@ import {
   subscribeCategories,
 } from "@/lib/firebase";
 import { statusLabel } from "@/lib/orders";
+import { ADMIN_GROUPS } from "@/lib/admin-nav";
+import { topLevelCategories } from "@/lib/categories";
 import type { Brand, Category, ContactMessage, Order, Product } from "@/lib/types";
 
 export default function AdminDashboard() {
@@ -52,6 +54,14 @@ export default function AdminDashboard() {
 
   const recent = orders.slice(0, 6);
 
+  const groupDetail: Record<string, string | null> = {
+    catalog: `${products.length} products · ${topLevelCategories(categories).length} departments · ${brands.length} brands`,
+    sales: `${stats.pending} in progress`,
+    content: stats.newMessages ? `${stats.newMessages} new` : "Nothing waiting",
+    people: null,
+    settings: null,
+  };
+
   return (
     <div className="min-h-screen">
       <AdminNav />
@@ -74,6 +84,39 @@ export default function AdminDashboard() {
           <StatCard icon={IndianRupee} label="Order value" value={formatPrice(stats.revenue)} detail="Excludes cancelled" />
           <StatCard icon={Package} label="Products" value={String(stats.products)} detail={`${stats.lowStock} low on stock`} />
           <StatCard icon={TrendingUp} label="New messages" value={String(stats.newMessages)} detail="From the contact form" />
+        </div>
+
+        <div className="mt-10">
+          <h2 className="mb-4 font-serif text-lg font-medium">Manage the store</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {ADMIN_GROUPS.filter((group) => group.key !== "dashboard").map((group) => (
+              <div key={group.key} className="rounded-lg border border-border bg-card p-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                    <group.icon className="h-4.5 w-4.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{group.label}</p>
+                    <p className="text-xs text-muted-foreground">{group.description}</p>
+                  </div>
+                </div>
+                {groupDetail[group.key] ? (
+                  <p className="mt-3 text-xs text-muted-foreground">{groupDetail[group.key]}</p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {group.tabs.map((tab) => (
+                    <Link
+                      key={tab.href}
+                      href={tab.href}
+                      className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-sage hover:text-foreground"
+                    >
+                      {tab.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-8 rounded-lg border border-border bg-card">
@@ -112,44 +155,24 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Link
-            href="/admin/brands"
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
-          >
-            <div>
-              <p className="font-medium">Brands & Logos</p>
-              <p className="text-sm text-muted-foreground">{brands.length} brand partners</p>
-            </div>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          </Link>
-          <Link
-            href="/admin/collections"
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
-          >
-            <div>
-              <p className="font-medium">Collections</p>
-              <p className="text-sm text-muted-foreground">{categories.length} store categories</p>
-            </div>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          </Link>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <Link
             href="/admin/orders"
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/30"
           >
             <div>
               <p className="font-medium">Manage orders</p>
-              <p className="text-sm text-muted-foreground">Update status & payment</p>
+              <p className="text-sm text-muted-foreground">Update status and payment</p>
             </div>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </Link>
           <Link
             href="/admin/settings"
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/40 transition-colors"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 hover:border-primary/30"
           >
             <div>
               <p className="font-medium">Store settings</p>
-              <p className="text-sm text-muted-foreground">Contact & shipping</p>
+              <p className="text-sm text-muted-foreground">Contact details, shipping and hours</p>
             </div>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </Link>
