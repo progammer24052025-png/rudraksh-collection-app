@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { ArrowRight, MapPin, Phone, Clock, Star, Sparkles, Heart, Truck, Shield, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -10,28 +11,29 @@ import { ProductCard } from "@/components/product-card";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 import { ScrollStory } from "@/components/scroll-story";
-import { fetchProducts, formatPrice, type Product } from "@/lib/store-data";
-import { brands, collections, collectionImages } from "@/lib/config";
+import { effectivePrice, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
+import { ShopByCategory } from "@/components/shop-by-category";
 import { useStore } from "@/lib/store-context";
 import { OffersBanner } from "@/components/kit/offers-banner";
 import { BrandCarousel } from "@/components/brand-carousel";
 import { ClothingRailHero, type RailGarment } from "@/components/ui/product-rail-gallery";
-import { subscribeBanners, isBannerLive, subscribeCategories } from "@/lib/firebase";
-import type { Banner, Category } from "@/lib/types";
+import { subscribeBanners, isBannerLive } from "@/lib/firebase";
+import type { Banner } from "@/lib/types";
+
+/**
+ * three.js is ~600 kB before it draws anything. Loading it dynamically keeps
+ * it out of the route's initial bundle, so the hero copy and buttons paint
+ * first and the canvas arrives after the page is interactive.
+ */
+const Hero3D = dynamic(() => import("@/components/hero-3d").then((mod) => mod.Hero3D), {
+  ssr: false,
+  loading: () => null,
+});
 
 function Hero3DLazy({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
-  const [Mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  if (!Mounted) return null;
-  return (
-    <Suspense fallback={null}>
-      <Hero3DInner scrollProgress={scrollProgress} />
-    </Suspense>
-  );
-}
-
-function Hero3DInner({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
-  const { Hero3D } = require("@/components/hero-3d");
+  if (!mounted) return null;
   return <Hero3D scrollProgress={scrollProgress} />;
 }
 
@@ -130,7 +132,7 @@ function BannerSection() {
           id: product.id,
           name: product.name,
           subtitle: product.brand_name,
-          price: product.sale_price ?? product.price,
+          price: effectivePrice(product),
           image: product.images[0] ?? "",
           href: `/products/${product.id}`,
         }))}
@@ -147,10 +149,10 @@ function NewOnTheRail({ products }: { products: Product[] }) {
     .map((product) => ({
       id: product.id,
       name: product.name,
-      description: product.brand_name ? `${product.brand_name} · ${formatPrice(product.sale_price ?? product.price)}` : formatPrice(product.sale_price ?? product.price),
+      description: product.brand_name ? `${product.brand_name} · ${formatPrice(effectivePrice(product))}` : formatPrice(effectivePrice(product)),
       image: product.images[0],
       cutout: product.image_cutout ?? undefined,
-      tag: formatPrice(product.sale_price ?? product.price),
+      tag: formatPrice(effectivePrice(product)),
       href: `/products/${product.id}`,
       details: [product.brand_name, product.category_name, product.fabric].filter((value): value is string => Boolean(value)),
     }));
@@ -171,91 +173,6 @@ function NewOnTheRail({ products }: { products: Product[] }) {
           </Button>
         }
       />
-    </section>
-  );
-}
-
-function CollectionsSection() {
-  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
-
-  useEffect(() => {
-    return subscribeCategories((list) => {
-      const active = list.filter((c) => c.status !== "hidden");
-      if (active.length > 0) {
-        setCategoriesList(active);
-      }
-    });
-  }, []);
-
-  const fallbackImages: Record<string, string> = {
-    "boys-wear": "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=600&h=750&fit=crop",
-    "girls-wear": "https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=600&h=750&fit=crop",
-    "baby-toddler": "https://images.unsplash.com/photo-1522771930-78848d9293e8?w=600&h=750&fit=crop",
-    "everyday-essentials": "https://images.unsplash.com/photo-1514090458221-65bb69cf63e6?w=600&h=750&fit=crop",
-    "casual-wear": "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=600&h=750&fit=crop",
-    "occasion-wear": "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=750&fit=crop",
-  };
-
-  const displayList =
-    categoriesList.length > 0
-      ? categoriesList.slice(0, 6)
-      : collections.slice(0, 6).map((c) => ({
-          id: c.slug,
-          name: c.name,
-          slug: c.slug,
-          image: fallbackImages[c.slug] || null,
-          status: "active" as const,
-          created_at: "",
-        }));
-
-  return (
-    <section className="py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div data-reveal className="mb-12 flex items-end justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Shop by Collection</p>
-            <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Find Their Style</h2>
-          </div>
-          <Button asChild variant="ghost" className="hidden gap-1 sm:flex">
-            <Link href="/collections">
-              View All <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-
-        <div data-stagger className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {displayList.map((col) => {
-            const imageSrc =
-              ("image" in col && col.image) ||
-              fallbackImages[col.slug] ||
-              fallbackImages["boys-wear"];
-
-            return (
-              <Link
-                key={col.slug}
-                href={`/products?category=${col.slug}`}
-                className="group relative block aspect-[4/5] overflow-hidden rounded-lg bg-muted"
-              >
-                <Image
-                  src={imageSrc}
-                  alt={col.name}
-                  fill
-                  unoptimized={imageSrc.startsWith("data:")}
-                  className="object-cover transition-transform duration-700 group-hover:scale-105"
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 33vw"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-6">
-                  <h3 className="font-serif text-2xl font-medium text-white">{col.name}</h3>
-                  <span className="mt-2 inline-flex items-center gap-1 text-sm text-white/80 transition-colors group-hover:text-white">
-                    Explore <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
     </section>
   );
 }
@@ -437,7 +354,7 @@ function HomePageContent() {
           <BannerSection />
           <NewOnTheRail products={products} />
           <BrandCarousel />
-          <CollectionsSection />
+          <ShopByCategory />
           <FeaturedProducts products={products} />
           <QualityStory />
           <StoreVisit />

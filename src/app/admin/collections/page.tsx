@@ -40,7 +40,8 @@ import {
   subscribeCategories,
   subscribeProducts,
 } from "@/lib/firebase";
-import { collections as defaultCollections, collectionImages } from "@/lib/config";
+import { collectionImages } from "@/lib/config";
+import { buildSeedCategories, parentSlugsOf, sortCategories, topLevelCategories } from "@/lib/categories";
 import type { Category, Product } from "@/lib/types";
 
 type CategoryDraft = {
@@ -51,6 +52,8 @@ type CategoryDraft = {
   description: string;
   status: "active" | "hidden";
   sort_order: number;
+  /** Departments this collection hangs under; empty means it is a department. */
+  parent_slugs: string[];
 };
 
 const EMPTY_DRAFT: CategoryDraft = {
@@ -61,6 +64,7 @@ const EMPTY_DRAFT: CategoryDraft = {
   description: "",
   status: "active",
   sort_order: 0,
+  parent_slugs: [],
 };
 
 function slugify(text: string): string {
@@ -103,16 +107,23 @@ export default function AdminCollectionsPage() {
     return counts;
   }, [products]);
 
+  // Departments first, then everything nested beneath them.
+  const orderedCategories = useMemo(() => {
+    const departments = topLevelCategories(categories);
+    const departmentSlugs = new Set(departments.map((category) => category.slug));
+    return [...departments, ...sortCategories(categories).filter((category) => !departmentSlugs.has(category.slug))];
+  }, [categories]);
+
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return categories;
-    return categories.filter(
+    if (!q) return orderedCategories;
+    return orderedCategories.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.slug.toLowerCase().includes(q) ||
         (c.description || "").toLowerCase().includes(q),
     );
-  }, [categories, search]);
+  }, [orderedCategories, search]);
 
   const openNew = () => {
     setDraft({
@@ -131,6 +142,7 @@ export default function AdminCollectionsPage() {
       description: cat.description || "",
       status: cat.status,
       sort_order: cat.sort_order ?? 0,
+      parent_slugs: parentSlugsOf(cat),
     });
     setDialogOpen(true);
   };
@@ -178,6 +190,7 @@ export default function AdminCollectionsPage() {
         description: draft.description.trim() || null,
         status: draft.status,
         sort_order: Number(draft.sort_order) || 0,
+        parent_slugs: draft.parent_slugs,
       });
 
       toast.success(draft.id ? "Collection updated" : "Collection created");
@@ -214,22 +227,40 @@ export default function AdminCollectionsPage() {
     }
   };
 
+  /**
+   * Merges the starter set in rather than replacing anything: missing
+   * departments and collections are created, and collections that already
+   * exist loose at the top level get nested under their department. Anything
+   * with parents already set is left exactly as it is.
+   */
   const seedDefaults = async () => {
     setSeeding(true);
     try {
-      for (let i = 0; i < defaultCollections.length; i++) {
-        const item = defaultCollections[i];
-        await saveCategory({
-          id: item.slug,
-          name: item.name,
-          slug: item.slug,
-          image: collectionImages[item.slug] || null,
-          description: null,
-          status: "active",
-          sort_order: i,
-        });
+      const existing = new Map(categories.map((category) => [category.slug, category]));
+      let created = 0;
+      let nested = 0;
+      for (const seed of buildSeedCategories()) {
+        const current = existing.get(seed.slug);
+        if (!current) {
+          await saveCategory({
+            ...seed,
+            image: collectionImages[seed.slug] || null,
+          });
+          created += 1;
+          continue;
+        }
+        if (!parentSlugsOf(current).length && (seed.parent_slugs ?? []).length) {
+          await saveCategory({ ...current, parent_slugs: seed.parent_slugs });
+          nested += 1;
+        }
       }
-      toast.success(`Successfully populated ${defaultCollections.length} collections`);
+      toast.success(
+        created || nested
+          ? `Added ${created} collection${created === 1 ? "" : "s"}${
+              nested ? `, nested ${nested} under their departments` : ""
+            }`
+          : "Every starter collection already exists",
+      );
     } catch (error) {
       toast.error("Failed to seed collections");
     } finally {
@@ -261,18 +292,16 @@ export default function AdminCollectionsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {categories.length === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={seedDefaults}
-                disabled={seeding}
-                className="gap-1.5"
-              >
-                <RefreshCw className={`h-4 w-4 ${seeding ? "animate-spin" : ""}`} />
-                Restore Default Collections
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={seedDefaults}
+              disabled={seeding || loading}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`h-4 w-4 ${seeding ? "animate-spin" : ""}`} />
+              {categories.length === 0 ? "Create starter collections" : "Add missing starters"}
+            </Button>
             <Button onClick={openNew} className="gap-2">
               <Plus className="h-4 w-4" /> Add Collection
             </Button>
@@ -323,14 +352,12 @@ export default function AdminCollectionsPage() {
             <p className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto">
               {search
                 ? "No collections match your search query."
-                : "You have not created any collections yet. Populate default collections to get started."}
+                : "No collections yet. Create the starter set — Men, Women and Kids with the six collections nested beneath."}
             </p>
             <div className="mt-6 flex justify-center gap-3">
-              {categories.length === 0 && (
-                <Button variant="outline" onClick={seedDefaults} disabled={seeding}>
-                  Restore Default Collections
-                </Button>
-              )}
+              <Button variant="outline" onClick={seedDefaults} disabled={seeding}>
+                Create starter collections
+              </Button>
               <Button onClick={openNew}>
                 <Plus className="mr-1.5 h-4 w-4" /> Add Collection
               </Button>
@@ -428,6 +455,23 @@ export default function AdminCollectionsPage() {
                       <p className="text-xs italic text-muted-foreground/60">
                         No description provided
                       </p>
+                    )}
+
+                    {parentSlugsOf(cat).length ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {parentSlugsOf(cat).map((slug) => (
+                          <span
+                            key={slug}
+                            className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-foreground/70"
+                          >
+                            {categories.find((category) => category.slug === slug)?.name ?? slug}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        Department
+                      </span>
                     )}
 
                     <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
@@ -579,6 +623,48 @@ export default function AdminCollectionsPage() {
                 value={draft.description}
                 onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
               />
+            </div>
+
+            {/* Departments */}
+            <div className="space-y-2 border-t border-border pt-3">
+              <Label>Show under</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {topLevelCategories(categories)
+                  .filter((department) => department.id !== draft.id && department.slug !== draft.slug)
+                  .map((department) => {
+                    const selected = draft.parent_slugs.includes(department.slug);
+                    return (
+                      <button
+                        key={department.slug}
+                        type="button"
+                        onClick={() =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            parent_slugs: prev.parent_slugs.includes(department.slug)
+                              ? prev.parent_slugs.filter((value) => value !== department.slug)
+                              : [...prev.parent_slugs, department.slug],
+                          }))
+                        }
+                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {department.name}
+                      </button>
+                    );
+                  })}
+                {topLevelCategories(categories).length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No departments yet — press &ldquo;Add starter collections&rdquo; to create Men, Women and Kids.
+                  </p>
+                ) : null}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Pick every department this collection belongs to. Leave empty and it becomes a
+                top-level department itself.
+              </p>
             </div>
 
             {/* Sort Order & Status */}

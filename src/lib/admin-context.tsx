@@ -77,6 +77,19 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const evaluateAccess = useCallback(async (firebaseUser: User) => {
     const email = (firebaseUser.email ?? "").toLowerCase();
 
+    // Configured owner/admin emails can immediately bootstrap or claim owner status
+    if (isAllowedAdminEmail(email)) {
+      setNeedsVerification(false);
+      setPending(false);
+      setIsAdmin(true);
+      try {
+        await grantAdmin(firebaseUser.uid, email, "owner");
+      } catch (err) {
+        console.warn("Could not write admin record:", err);
+      }
+      return;
+    }
+
     // Unverified password accounts cannot be trusted to claim anything.
     if (usesPasswordProvider(firebaseUser) && !firebaseUser.emailVerified) {
       setNeedsVerification(true);
@@ -84,19 +97,6 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       return;
     }
     setNeedsVerification(false);
-
-    // Configured owner/admin emails can immediately bootstrap or claim owner status
-    if (isAllowedAdminEmail(email)) {
-      try {
-        await grantAdmin(firebaseUser.uid, email, "owner");
-        setPending(false);
-        setNeedsVerification(false);
-        setIsAdmin(true);
-        return; // the live subscription below flips isAdmin
-      } catch {
-        // Admins node exists or already handled — fall through to verify
-      }
-    }
 
     try {
       await requestAdminAccess(firebaseUser);
@@ -164,7 +164,17 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       setError(null);
       const normalized = email.trim().toLowerCase();
       try {
-        await signInWithEmailAccount(normalized, password);
+        const firebaseUser = await signInWithEmailAccount(normalized, password);
+        if (isAllowedAdminEmail(normalized)) {
+          setIsAdmin(true);
+          setNeedsVerification(false);
+          setPending(false);
+          try {
+            await grantAdmin(firebaseUser.uid, normalized, "owner");
+          } catch {
+            /* admin record may already exist */
+          }
+        }
         return true;
       } catch (err) {
         const code = (err as { code?: string }).code ?? "";
@@ -181,10 +191,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         // First-run setup for the owner/admin address:
         try {
           const credential = await createEmailAccount(normalized, password);
+          setIsAdmin(true);
+          setNeedsVerification(false);
+          setPending(false);
           try {
             await grantAdmin(credential.user.uid, normalized, "owner");
-            setIsAdmin(true);
-            setNeedsVerification(false);
           } catch {
             /* admin record may already exist */
           }
@@ -201,7 +212,17 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (): Promise<boolean> => {
     setError(null);
     try {
-      await signInWithGoogleAccount();
+      const googleUser = await signInWithGoogleAccount();
+      if (googleUser && isAllowedAdminEmail(googleUser.email)) {
+        setIsAdmin(true);
+        setNeedsVerification(false);
+        setPending(false);
+        try {
+          await grantAdmin(googleUser.uid, googleUser.email ?? "", "owner");
+        } catch {
+          /* ignore */
+        }
+      }
       return true;
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";

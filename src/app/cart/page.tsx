@@ -8,7 +8,7 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
-import { fetchProducts, formatPrice } from "@/lib/store-data";
+import { effectivePrice, fetchProducts, formatPrice } from "@/lib/store-data";
 import { useStore } from "@/lib/store-context";
 import { useEffect } from "react";
 
@@ -62,7 +62,7 @@ function CartContent() {
             {items.map((item, idx) => {
               const product = getProduct(item.productId);
               if (!product) return null;
-              const price = product.sale_price ?? product.price;
+              const price = effectivePrice(product);
 
               return (
                 <motion.div

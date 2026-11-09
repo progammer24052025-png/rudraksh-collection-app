@@ -11,10 +11,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchProducts, type Product } from "@/lib/store-data";
-import { brands as fallbackBrands, collections as fallbackCollections } from "@/lib/config";
-import { subscribeBrands, subscribeCategories } from "@/lib/firebase";
+import { effectivePrice, fetchProducts, type Product } from "@/lib/store-data";
+import { brands } from "@/lib/config";
+import { fetchBrands, fetchCategories } from "@/lib/firebase";
 import type { Brand, Category } from "@/lib/types";
+import {
+  activeCategories,
+  buildSeedCategories,
+  categoryMatchesSlug,
+  normaliseCategory,
+  sortCategories,
+  topLevelCategories,
+} from "@/lib/categories";
 import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
 import { TagSearch } from "@/components/kit/tag-search";
 import { PageSpinner } from "@/components/kit/spinner";
@@ -35,27 +43,9 @@ function ProductsContent() {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 3000]);
   const [sortBy, setSortBy] = useState("newest");
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [liveBrands, setLiveBrands] = useState<Brand[]>([]);
-  const [liveCategories, setLiveCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    const unsubBrands = subscribeBrands((list) => {
-      const active = list.filter((b) => b.status !== "hidden");
-      if (active.length > 0) setLiveBrands(active);
-    });
-    const unsubCats = subscribeCategories((list) => {
-      const active = list.filter((c) => c.status !== "hidden");
-      if (active.length > 0) setLiveCategories(active);
-    });
-    return () => {
-      unsubBrands();
-      unsubCats();
-    };
-  }, []);
-
-  const brandsList = liveBrands.length > 0 ? liveBrands : fallbackBrands;
-  const collectionsList = liveCategories.length > 0 ? liveCategories : fallbackCollections;
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -63,13 +53,45 @@ function ProductsContent() {
       setProducts(r.products);
       setLoading(false);
     }).catch(() => setLoading(false));
+
+    fetchCategories()
+      .then((list) => setCategories(list.length ? list.map(normaliseCategory) : buildSeedCategories()))
+      .catch(() => setCategories(buildSeedCategories()));
+    fetchBrands().then(setLiveBrands).catch(() => {});
   }, []);
+
+  const categoryTree = useMemo(
+    () => (categories.length ? categories : buildSeedCategories()),
+    [categories],
+  );
+
+  // Database first; the built-in list keeps the shop usable before seeding.
+  const brandOptions = useMemo(
+    () =>
+      liveBrands.length
+        ? liveBrands.map((brand) => ({ slug: brand.slug, name: brand.name }))
+        : brands.map((brand) => ({ slug: brand.slug, name: brand.name })),
+    [liveBrands],
+  );
+
+  const categoryOptions = useMemo(() => {
+    const tree = activeCategories(categoryTree);
+    const roots = topLevelCategories(categoryTree);
+    const rootSlugs = new Set(roots.map((category) => category.slug));
+    return [...roots, ...sortCategories(tree).filter((category) => !rootSlugs.has(category.slug))];
+  }, [categoryTree]);
 
   const filteredProducts = useMemo(() => {
     let filtered = [...products];
 
-    if (selectedBrand) filtered = filtered.filter(p => p.brand_slug === selectedBrand);
-    if (selectedCategory) filtered = filtered.filter(p => p.category_slug === selectedCategory);
+    if (selectedBrand)
+      filtered = filtered.filter(p => p.brand_slug === selectedBrand || p.brand_id === selectedBrand);
+    if (selectedCategory)
+      filtered = filtered.filter(
+        p =>
+          categoryMatchesSlug(categoryTree, p.category_slug, selectedCategory) ||
+          categoryMatchesSlug(categoryTree, p.category_id, selectedCategory),
+      );
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(p =>
@@ -91,23 +113,23 @@ function ProductsContent() {
       filtered = filtered.filter(p => (p.sizes ?? []).some(s => selectedSizes.includes(s)));
     }
     filtered = filtered.filter(p => {
-      const price = p.sale_price ?? p.price;
+      const price = effectivePrice(p);
       return price >= priceRange[0] && price <= priceRange[1];
     });
 
     switch (sortBy) {
       case "price-low":
-        filtered.sort((a, b) => (a.sale_price ?? a.price) - (b.sale_price ?? b.price));
+        filtered.sort((a, b) => effectivePrice(a) - effectivePrice(b));
         break;
       case "price-high":
-        filtered.sort((a, b) => (b.sale_price ?? b.price) - (a.sale_price ?? a.price));
+        filtered.sort((a, b) => effectivePrice(b) - effectivePrice(a));
         break;
       case "newest":
       default:
         filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
     return filtered;
-  }, [products, selectedBrand, selectedCategory, searchQuery, selectedSizes, selectedTags, priceRange, sortBy]);
+  }, [products, selectedBrand, selectedCategory, categoryTree, searchQuery, selectedSizes, selectedTags, priceRange, sortBy]);
 
   // Our own vocabulary, built from what is actually in the catalogue.
   const tagSuggestions = useMemo(() => {
@@ -122,11 +144,13 @@ function ProductsContent() {
       bump(product.category_name);
       (product.tags ?? []).forEach(bump);
     });
+    // Categories are always offered, even before a product uses them.
+    categoryOptions.forEach(category => counts.set(category.name, (counts.get(category.name) ?? 0) + 1));
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 24)
       .map(([tag]) => tag);
-  }, [products]);
+  }, [products, categoryOptions]);
 
   const toggleSize = (size: string) => {
     setSelectedSizes(prev => prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]);
@@ -165,7 +189,7 @@ function ProductsContent() {
               !selectedBrand ? "bg-primary text-primary-foreground" : "hover:bg-muted"
             }`}
           >All Brands</button>
-          {brandsList.map(b => (
+          {brandOptions.map(b => (
             <button
               key={b.slug}
               onClick={() => setSelectedBrand(b.slug)}
@@ -178,15 +202,15 @@ function ProductsContent() {
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider">Collection</h3>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider">Category</h3>
         <div className="space-y-1">
           <button
             onClick={() => setSelectedCategory(null)}
             className={`block w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
               !selectedCategory ? "bg-primary text-primary-foreground" : "hover:bg-muted"
             }`}
-          >All Collections</button>
-          {collectionsList.map(c => (
+          >All Categories</button>
+          {categoryOptions.map(c => (
             <button
               key={c.slug}
               onClick={() => setSelectedCategory(c.slug)}
@@ -246,9 +270,9 @@ function ProductsContent() {
         items={[
           { label: "Shop", href: "/products" },
           ...(selectedBrand
-            ? [{ label: brandsList.find(b => b.slug === selectedBrand)?.name ?? selectedBrand }]
+            ? [{ label: brandOptions.find(b => b.slug === selectedBrand)?.name ?? selectedBrand }]
             : selectedCategory
-            ? [{ label: collectionsList.find(c => c.slug === selectedCategory)?.name ?? selectedCategory }]
+            ? [{ label: categoryOptions.find(c => c.slug === selectedCategory)?.name ?? selectedCategory }]
             : []),
         ]}
         className="-mt-2"
@@ -256,9 +280,9 @@ function ProductsContent() {
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-medium sm:text-4xl">
           {selectedBrand
-            ? brandsList.find(b => b.slug === selectedBrand)?.name
+            ? brandOptions.find(b => b.slug === selectedBrand)?.name
             : selectedCategory
-            ? collectionsList.find(c => c.slug === selectedCategory)?.name
+            ? categoryOptions.find(c => c.slug === selectedCategory)?.name
             : searchQuery
             ? `Search: "${searchQuery}"`
             : "All Products"}

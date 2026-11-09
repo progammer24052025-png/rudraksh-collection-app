@@ -8,13 +8,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/admin-nav";
 import { toast } from "sonner";
-import { formatPrice, removeValue, subscribeProducts } from "@/lib/firebase";
-import type { Product } from "@/lib/types";
+import {
+  effectivePrice,
+  formatPrice,
+  removeValue,
+  subscribeCategories,
+  subscribeProducts,
+} from "@/lib/firebase";
+import type { Category, Product } from "@/lib/types";
+import {
+  activeCategories,
+  categoryDescendantSlugs,
+  sortCategories,
+  topLevelCategories,
+} from "@/lib/categories";
+import { cn } from "@/lib/utils";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,17 +40,39 @@ export default function AdminProductsPage() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => subscribeCategories(setCategories), []);
+
+  // Departments first, then everything beneath them — the same order shoppers see.
+  const categoryChips = useMemo(() => {
+    const roots = topLevelCategories(categories);
+    const seen = new Set(roots.map((category) => category.slug));
+    const nested = sortCategories(activeCategories(categories)).filter((category) => {
+      if (seen.has(category.slug)) return false;
+      seen.add(category.slug);
+      return true;
+    });
+    return [...roots, ...nested];
+  }, [categories]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return products;
-    return products.filter(
-      (product) =>
+    return products.filter((product) => {
+      if (
+        categoryFilter &&
+        !(product.category_slug &&
+          categoryDescendantSlugs(categories, categoryFilter).includes(product.category_slug))
+      ) {
+        return false;
+      }
+      if (!term) return true;
+      return (
         product.name.toLowerCase().includes(term) ||
         (product.brand_name ?? "").toLowerCase().includes(term) ||
         (product.category_name ?? "").toLowerCase().includes(term) ||
-        (product.sku ?? "").toLowerCase().includes(term),
-    );
-  }, [products, search]);
+        (product.sku ?? "").toLowerCase().includes(term)
+      );
+    });
+  }, [products, search, categoryFilter, categories]);
 
   const handleDelete = async (product: Product) => {
     if (!confirm(`Delete “${product.name}”? This cannot be undone.`)) return;
@@ -78,6 +115,38 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
+        {categoryChips.length ? (
+          <div className="mb-5 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter(null)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs transition-colors",
+                categoryFilter === null
+                  ? "border-sage bg-sage/10 text-sage"
+                  : "border-border text-muted-foreground hover:border-sage/60 hover:text-foreground",
+              )}
+            >
+              All categories
+            </button>
+            {categoryChips.map((category) => (
+              <button
+                key={category.slug}
+                type="button"
+                onClick={() => setCategoryFilter(category.slug)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs transition-colors",
+                  categoryFilter === category.slug
+                    ? "border-sage bg-sage/10 text-sage"
+                    : "border-border text-muted-foreground hover:border-sage/60 hover:text-foreground",
+                )}
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="flex justify-center py-20 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -113,8 +182,8 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="p-3 text-muted-foreground">{product.brand_name || "—"}</td>
                     <td className="p-3 font-medium">
-                      {formatPrice(product.sale_price ?? product.price)}
-                      {product.sale_price ? (
+                      {formatPrice(effectivePrice(product))}
+                      {effectivePrice(product) < product.price ? (
                         <span className="ml-2 text-xs text-muted-foreground line-through">
                           {formatPrice(product.price)}
                         </span>

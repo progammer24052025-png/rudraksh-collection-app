@@ -40,7 +40,7 @@
         ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && ((auth.uid === $uid && !root.child('rudraksh/admins').exists() && newData.child('email').val() === auth.token.email && (auth.token.email === 'admin@rudrakshcollection.in' || auth.token.email === 'progammer.24052025@gmail.com' || auth.token.email === 'rudrakshcollection22309@gmail.com')) || root.child('rudraksh/admins').child(auth.uid).exists())"
+          ".write": "auth != null && ((auth.uid === $uid && !root.child('rudraksh/admins').exists() && auth.token.email_verified === true && newData.child('email').val() === auth.token.email && (auth.token.email === 'admin@rudrakshcollection.in' || auth.token.email === 'progammer.24052025@gmail.com' || auth.token.email === 'rudrakshcollection22309@gmail.com')) || root.child('rudraksh/admins').child(auth.uid).exists())"
         }
       },
       "adminRequests": {
@@ -69,7 +69,7 @@
         ],
         "$orderId": {
           ".read": "auth != null && (data.child('user_id').val() === auth.uid || root.child('rudraksh/admins').child(auth.uid).exists())",
-          ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists() || (!data.exists() && newData.hasChildren(['order_number', 'customer_name', 'phone', 'address', 'city', 'state', 'pincode', 'items', 'total', 'order_status']) && newData.child('total').isNumber() && newData.child('total').val() >= 0)",
+          ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists() || (!data.exists() && newData.hasChildren(['order_number', 'customer_name', 'phone', 'address', 'city', 'state', 'pincode', 'items', 'total', 'order_status']) && newData.child('payment_method').val() === 'cod' && newData.child('payment_status').val() === 'pending' && newData.child('order_status').val() === 'placed' && newData.child('total').isNumber() && newData.child('total').val() >= 0 && !newData.child('razorpay_payment_id').exists() && !newData.child('razorpay_order_id').exists())",
           ".validate": "newData.hasChildren(['order_number', 'customer_name', 'phone', 'items', 'total']) || !newData.exists()"
         }
       },
@@ -87,6 +87,10 @@
           ".read": "auth != null && auth.uid === $uid",
           ".write": "auth != null && auth.uid === $uid"
         }
+      },
+      "payments": {
+        ".read": false,
+        ".write": false
       },
       "tracking": {
         ".indexOn": [
@@ -106,7 +110,7 @@
         ],
         "$messageId": {
           ".write": "!data.exists() && newData.hasChildren(['name', 'email', 'message', 'status', 'created_at'])",
-          ".validate": "newData.child('email').val().contains('@') && newData.child('message').val().length <= 4000 || !newData.exists()"
+          ".validate": "newData.child('email').val().contains('@') && newData.child('name').val().length <= 120 && newData.child('message').val().length <= 4000 && newData.child('status').val() === 'new' || !newData.exists()"
         }
       }
     }

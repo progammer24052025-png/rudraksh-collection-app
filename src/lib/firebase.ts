@@ -62,22 +62,47 @@ import type {
   UserProfile,
 } from "./types";
 
-const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "";
+function cleanDatabaseUrl(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  let url = raw.trim().replace(/^["']|["']$/g, "").trim();
+  if (!url) return undefined;
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  try {
+    const parsed = new URL(url);
+    // Realtime Database URL MUST only be the origin (e.g. https://xyz-default-rtdb.firebaseio.com)
+    return parsed.origin;
+  } catch {
+    return url.replace(/\/+$/, "").split("/").slice(0, 3).join("/");
+  }
+}
+
+function cleanDbRoot(raw?: string | null): string {
+  if (!raw) return "rudraksh";
+  const cleaned = raw.trim().replace(/^["']|["']$/g, "").replace(/^\/+|\/+$/g, "").trim();
+  return cleaned || "rudraksh";
+}
+
+const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "").trim().replace(/^["']|["']$/g, "");
+
+const databaseUrl = cleanDatabaseUrl(
+  process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+    (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined),
+);
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  apiKey: (process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "").trim().replace(/^["']|["']$/g, ""),
+  authDomain: (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "").trim().replace(/^["']|["']$/g, ""),
   projectId,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  databaseURL:
-    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
-    (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined),
+  storageBucket: (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "").trim().replace(/^["']|["']$/g, ""),
+  messagingSenderId: (process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "").trim().replace(/^["']|["']$/g, ""),
+  appId: (process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "").trim().replace(/^["']|["']$/g, ""),
+  databaseURL: databaseUrl,
 };
 
 /** Root node inside the Realtime Database reserved for this store. */
-export const DB_ROOT = process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh";
+export const DB_ROOT = cleanDbRoot(process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT);
 
 /** Emails allowed to bootstrap or access store owner/admin accounts. */
 export const DEFAULT_ADMIN_EMAILS = [
@@ -103,9 +128,9 @@ export const isAllowedAdminEmail = (email?: string | null): boolean => {
 
 export const isFirebaseConfigured = (): boolean =>
   Boolean(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+    firebaseConfig.apiKey &&
+      firebaseConfig.authDomain &&
+      firebaseConfig.projectId &&
       firebaseConfig.databaseURL,
   );
 
@@ -133,16 +158,27 @@ export function getFirebaseDb(): Database {
   if (typeof window === "undefined") {
     throw new Error("Firebase Realtime Database is only available in the browser");
   }
-  if (!cachedDb) cachedDb = getDatabase(appInstance());
+  if (!cachedDb) {
+    const app = appInstance();
+    cachedDb = databaseUrl ? getDatabase(app, databaseUrl) : getDatabase(app);
+  }
   return cachedDb;
 }
 
 /** Build a Realtime Database reference path, e.g. rtdbRef("products", id). */
-export const rtdbRef = (...segments: string[]) =>
-  ref(getFirebaseDb(), [DB_ROOT, ...segments.filter(Boolean)].join("/"));
+export const rtdbRef = (...segments: string[]) => {
+  const cleanSegments = [DB_ROOT, ...segments]
+    .map((s) => (s ?? "").toString().trim().replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  return ref(getFirebaseDb(), cleanSegments.join("/"));
+};
 
-export const rtdbPath = (...segments: string[]) =>
-  [DB_ROOT, ...segments.filter(Boolean)].join("/");
+export const rtdbPath = (...segments: string[]) => {
+  const cleanSegments = [DB_ROOT, ...segments]
+    .map((s) => (s ?? "").toString().trim().replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  return cleanSegments.join("/");
+};
 
 // ── Generic Realtime Database helpers ────────────────────────
 export async function readValue<T>(segments: string[]): Promise<T | null> {
@@ -233,7 +269,9 @@ export async function saveBrand(brand: Partial<Brand> & { name: string }): Promi
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
   const id = brand.id?.trim() || slug || `brand-${Date.now().toString(36)}`;
+  const existing = await readValue<Brand>(["brands", id]);
   const record: Brand = {
+    ...(existing ?? ({} as Brand)),
     id,
     name: brand.name.trim(),
     slug: slug || id,
@@ -241,13 +279,87 @@ export async function saveBrand(brand: Partial<Brand> & { name: string }): Promi
     description: brand.description?.trim() || null,
     status: brand.status ?? "active",
     sort_order: typeof brand.sort_order === "number" ? brand.sort_order : 0,
-    created_at: brand.created_at ?? now,
+    category_slugs: brand.category_slugs ?? existing?.category_slugs ?? [],
+    category_names: brand.category_names ?? existing?.category_names ?? [],
+    category_source: brand.category_source ?? existing?.category_source ?? null,
+    category_updated_at: brand.category_updated_at ?? existing?.category_updated_at,
+    created_at: brand.created_at ?? existing?.created_at ?? now,
   };
   await writeValue(["brands", id], record);
   return record;
 }
 
-export const deleteBrand = (id: string) => removeValue(["brands", id]);
+/** True when a product is filed under this brand, by id or by slug. */
+const referencesBrand = (
+  product: Pick<Product, "brand_id" | "brand_slug"> | null | undefined,
+  brandId: string,
+  brandSlug: string,
+): boolean => {
+  if (!product) return false;
+  const id = (product.brand_id ?? "").toString().trim();
+  const slug = (product.brand_slug ?? "").toString().trim();
+  return id === brandId || id === brandSlug || slug === brandSlug || slug === brandId;
+};
+
+/**
+ * Deletes a brand **and every product filed under it**.
+ *
+ * A product without its brand is not something the store can sell or even
+ * label, so leaving them behind only produces rows in the admin that point
+ * at a partner that no longer exists. Removing them together keeps the
+ * catalogue honest, and the storefront additionally hides any leftover
+ * orphan (see `withoutOrphanedBrands`).
+ */
+export async function deleteBrand(id: string): Promise<{
+  brandName: string | null;
+  deletedProducts: number;
+}> {
+  const key = (id ?? "").toString().trim();
+  if (!key) throw new Error("A brand id is required");
+
+  const brand = await readValue<Brand>(["brands", key]);
+  const slug = (brand?.slug || key).trim();
+
+  const products = (await readValue<EntityMap<Product>>(["products"])) ?? {};
+  const owned = Object.keys(products).filter((productId) =>
+    referencesBrand(products[productId], key, slug),
+  );
+
+  // One multi-location update removes the whole set in a single round trip.
+  if (owned.length) {
+    await updateValue(
+      ["products"],
+      Object.fromEntries(owned.map((productId) => [productId, null])),
+    );
+  }
+
+  await removeValue(["brands", key]);
+  return { brandName: brand?.name ?? null, deletedProducts: owned.length };
+}
+
+/**
+ * Drops products that point at a brand which no longer exists.
+ *
+ * Products with no brand at all are kept — a brand is optional. Called with
+ * the known brands, so a deleted partner can never leave shoppable orphans
+ * on the storefront, even if the deletion happened before the cascade above
+ * existed.
+ */
+export function withoutOrphanedBrands(products: Product[], brands: Brand[]): Product[] {
+  const known = new Set<string>();
+  for (const brand of brands) {
+    if (brand.id) known.add(brand.id);
+    if (brand.slug) known.add(brand.slug);
+  }
+
+  return products.filter((product) => {
+    const refs = [product.brand_id, product.brand_slug]
+      .map((value) => (value ?? "").toString().trim())
+      .filter(Boolean);
+    if (!refs.length) return true;
+    return refs.some((ref) => known.has(ref));
+  });
+}
 
 export const subscribeCategories = (callback: (categories: Category[]) => void) =>
   subscribeValue<EntityMap<Category>>(["categories"], (value) =>
@@ -258,46 +370,73 @@ export const subscribeCategories = (callback: (categories: Category[]) => void) 
     ),
   );
 
+export const fetchProducts = async (): Promise<Product[]> => toList<Product>(await readValue(["products"]));
+
 export const fetchCategories = async (): Promise<Category[]> =>
   toList<Category>(await readValue(["categories"])).sort(
     (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name),
   );
 
-export async function saveCategory(category: Partial<Category> & { name: string }): Promise<Category> {
-  const now = new Date().toISOString();
+/**
+ * Categories are keyed by `id` (which defaults to the slug) so product
+ * records keep resolving. Unspecified fields are preserved, which lets the
+ * admin dialog save a partial record without wiping the cover photo or the
+ * department links it hangs under.
+ */
+export async function saveCategory(
+  category: Partial<Category> & { name: string },
+): Promise<void> {
   const slug = (category.slug || category.name)
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-  const id = category.id?.trim() || slug || `cat-${Date.now().toString(36)}`;
-  const record: Category = {
+  const id = (category.id || slug).trim();
+  if (!id) throw new Error("A category id is required");
+  const now = new Date().toISOString();
+  const existing = await readValue<Category>(["categories", id]);
+  await writeValue(["categories", id], {
+    ...(existing ?? {}),
+    ...category,
     id,
-    name: category.name.trim(),
     slug: slug || id,
-    image: category.image?.trim() || null,
-    description: category.description?.trim() || null,
-    status: category.status ?? "active",
-    sort_order: typeof category.sort_order === "number" ? category.sort_order : 0,
-    created_at: category.created_at ?? now,
-  };
-  await writeValue(["categories", id], record);
-  return record;
+    name: category.name.trim(),
+    parent_slugs: category.parent_slugs ?? existing?.parent_slugs ?? [],
+    parent_slug: category.parent_slug ?? existing?.parent_slug ?? null,
+    updated_at: now,
+    created_at: existing?.created_at || category.created_at || now,
+  });
 }
 
-export const deleteCategory = (id: string) => removeValue(["categories", id]);
+/** Removes the category only — products keep their now-orphaned category slug. */
+export const deleteCategory = (idOrSlug: string) => removeValue(["categories", idOrSlug]);
 
-export const fetchProducts = async (): Promise<Product[]> => toList<Product>(await readValue(["products"]));
 
+/**
+ * Looks one product up by slug or id.
+ *
+ * The indexed query comes first: a product page used to download the entire
+ * catalogue just to find one row, which dominates the page's data cost.
+ * `slug` is indexed in the database rules, so this is a single-key read.
+ */
 export const fetchProductBySlug = async (slug: string): Promise<Product | null> => {
-  const products = await fetchProducts();
-  const direct = products.find((product) => product.slug === slug || product.id === slug);
-  if (direct) return direct;
+  const key = (slug ?? "").toString().trim();
+  if (!key) return null;
 
-  const snapshot = await get(query(rtdbRef("products"), orderByChild("slug"), equalTo(slug)));
-  const match = snapshot.val() as EntityMap<Product> | null;
-  const [first] = toList<Product>(match);
-  return first ?? null;
+  try {
+    const snapshot = await get(query(rtdbRef("products"), orderByChild("slug"), equalTo(key)));
+    const [first] = toList<Product>(snapshot.val() as EntityMap<Product> | null);
+    if (first) return first;
+  } catch (error) {
+    console.warn("Indexed product lookup failed, falling back to a scan:", error);
+  }
+
+  // Records keyed by something other than the slug still resolve by id.
+  const byKey = await readValue<Product>(["products", key]);
+  if (byKey) return { ...byKey, id: byKey.id || key } as Product;
+
+  const products = await fetchProducts();
+  return products.find((product) => product.slug === key || product.id === key) ?? null;
 };
 
 // ── Orders ─────────────────────────────────────────────────
@@ -328,12 +467,18 @@ export const subscribeUserOrders = (uid: string, callback: (orders: Order[]) => 
 export const subscribeOrder = (orderId: string, callback: (order: Order | null) => void) =>
   subscribeValue<Order>(["orders", orderId], callback);
 
+// Same alphabet and length as the server generator: the number is also the
+// guest tracking secret, so it must come from the CSPRNG, not Math.random.
+const ORDER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 export function makeOrderNumber(): string {
   const stamp = new Date();
   const date = `${stamp.getFullYear()}${String(stamp.getMonth() + 1).padStart(2, "0")}${String(
     stamp.getDate(),
   ).padStart(2, "0")}`;
-  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const random = Array.from(bytes, (byte) => ORDER_ALPHABET[byte % ORDER_ALPHABET.length]).join("");
   return `RC-${date}-${random}`;
 }
 
@@ -469,6 +614,22 @@ export async function updateOrderStatus(
     status_history: history,
     updated_at: now,
   });
+
+  // A cancelled order puts its units back, but only when the server actually
+  // took them out — otherwise browsers that never decremented would inflate it.
+  if (status === "cancelled" && current.order_status !== "cancelled" && current.stock_decremented) {
+    try {
+      const catalogue = await readValue<Record<string, Product>>(["products"]);
+      for (const item of current.items ?? []) {
+        const product = catalogue?.[item.productId];
+        if (!product || typeof product.stock !== "number") continue;
+        await updateValue(["products", item.productId], { stock: product.stock + item.quantity });
+      }
+      await updateValue(["orders", orderId], { stock_decremented: false });
+    } catch (error) {
+      console.warn("Could not return cancelled stock:", error);
+    }
+  }
 
   // Customers hear about every meaningful step, not just the first one.
   if (status !== current.order_status) {
@@ -867,8 +1028,10 @@ export const formatPrice = (price: number) =>
 
 export const getFirebaseProjectId = () => projectId || "rudraksh";
 
-export const effectivePrice = (product: Pick<Product, "price" | "sale_price">) =>
-  product.sale_price != null && product.sale_price < product.price ? product.sale_price : product.price;
+// Re-exported so existing callers keep working; the rule itself lives in
+// `pricing.ts` because the server route uses it too and must not pull the
+// Firebase browser bundle into a Worker.
+export { effectivePrice } from "./pricing";
 
 export type {
   ActivityEvent,

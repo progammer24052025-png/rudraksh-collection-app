@@ -65,6 +65,25 @@ export default function AdminSettingsPage() {
   const [form, setForm] = useState<FormState>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // What the server says about the payment gateway. Online payment is hidden at
+  // checkout unless the keys exist AND the server can write the paid order, so
+  // the shop can see exactly which of the two is missing.
+  const [gateway, setGateway] = useState<{ configured: boolean; secure: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/payments")
+      .then((response) => response.json())
+      .then((data: { configured?: boolean; secure?: boolean }) => {
+        if (!cancelled) {
+          setGateway({ configured: Boolean(data.configured), secure: Boolean(data.secure) });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     readSettings()
@@ -319,6 +338,31 @@ export default function AdminSettingsPage() {
               />
               Show online payment (Razorpay)
             </label>
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <p className="text-sm font-medium">Online payment readiness</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Checkout only offers Razorpay when all three are true. Otherwise the option stays hidden
+              and customers can still pay cash on delivery.
+            </p>
+            <ul className="mt-3 space-y-1.5 text-xs">
+              <li>{form.razorpayEnabled ? "✓" : "✗"} Shown at checkout (the toggle above)</li>
+              <li>
+                {gateway?.configured ? "✓" : "✗"} RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET set on the
+                server
+              </li>
+              <li>
+                {gateway?.secure ? "✓" : "✗"} FIREBASE_SERVICE_ACCOUNT set, so a paid order is written
+                server-side
+              </li>
+            </ul>
+            {gateway && (!gateway.configured || !gateway.secure) ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Add the missing values to <code className="font-mono">.env</code> and restart the
+                server.
+              </p>
+            ) : null}
           </div>
 
           <Button onClick={handleSave} disabled={saving}>

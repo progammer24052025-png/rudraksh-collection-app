@@ -165,6 +165,57 @@ export async function adminPush(path: string, value: unknown): Promise<string> {
   return (await response.json()) as string;
 }
 
+/**
+ * Adds `delta` to a numeric leaf, atomically.
+ *
+ * A read-then-write would let two concurrent checkouts both spend the same last
+ * unit, so the write is guarded by the node's ETag: if anything changed between
+ * our read and our write the server answers 412 and we try again with fresh
+ * numbers. Returns the stored value afterwards, or null when the leaf is not a
+ * number (an unset stock means "no limit", which we leave alone).
+ */
+export async function adminAdjustNumber(
+  path: string,
+  delta: number,
+  attempts = 3,
+): Promise<number | null> {
+  const account = readServiceAccount();
+  if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
+  const token = await accessToken(account);
+  const url = `${urlFor(account, path)}?access_token=${encodeURIComponent(token)}`;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const read = await fetch(url, {
+      headers: { "X-Firebase-ETag": "true" },
+      cache: "no-store",
+    });
+    if (!read.ok) throw new Error(`RTDB read failed (${read.status})`);
+
+    const etag = read.headers.get("etag");
+    const raw = (await read.json()) as number | string | null;
+    const current = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(current)) return null;
+
+    const next = Math.max(0, current + delta);
+    const write = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        ...(etag ? { "if-match": etag } : {}),
+      },
+      body: JSON.stringify(next),
+    });
+
+    if (write.ok) return next;
+    // 412 means someone else moved the number first — re-read and retry.
+    if (write.status !== 412) {
+      throw new Error(`RTDB write failed (${write.status}): ${(await write.text()).slice(0, 200)}`);
+    }
+  }
+
+  throw new Error(`RTDB write kept conflicting on ${path}`);
+}
+
 export async function adminUpdate(path: string, value: Record<string, unknown>): Promise<void> {
   const account = readServiceAccount();
   if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");

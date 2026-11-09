@@ -18,6 +18,7 @@ import {
   ArrowUpDown,
   RefreshCw,
   Loader2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,10 +41,12 @@ import {
   deleteBrand,
   saveBrand,
   subscribeBrands,
+  subscribeCategories,
   subscribeProducts,
 } from "@/lib/firebase";
+import { activeCategories, detectBrandCategories, sortCategories } from "@/lib/categories";
 import { brands as defaultBrands } from "@/lib/config";
-import type { Brand, Product } from "@/lib/types";
+import type { Brand, Category, Product } from "@/lib/types";
 
 type BrandDraft = {
   id: string;
@@ -53,6 +56,7 @@ type BrandDraft = {
   description: string;
   status: "active" | "hidden";
   sort_order: number;
+  category_names: string[];
 };
 
 const EMPTY_DRAFT: BrandDraft = {
@@ -63,6 +67,7 @@ const EMPTY_DRAFT: BrandDraft = {
   description: "",
   status: "active",
   sort_order: 0,
+  category_names: [],
 };
 
 function slugify(text: string): string {
@@ -83,6 +88,8 @@ export default function AdminBrandsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Brand | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [source, setSource] = useState<Brand["category_source"]>(null);
 
   useEffect(() => {
     const offBrands = subscribeBrands((list) => {
@@ -90,9 +97,11 @@ export default function AdminBrandsPage() {
       setLoading(false);
     });
     const offProducts = subscribeProducts(setProducts);
+    const offCategories = subscribeCategories(setCategories);
     return () => {
       offBrands();
       offProducts();
+      offCategories();
     };
   }, []);
 
@@ -122,6 +131,7 @@ export default function AdminBrandsPage() {
       ...EMPTY_DRAFT,
       sort_order: brands.length,
     });
+    setSource(null);
     setDialogOpen(true);
   };
 
@@ -134,7 +144,9 @@ export default function AdminBrandsPage() {
       description: brand.description || "",
       status: brand.status,
       sort_order: brand.sort_order ?? 0,
+      category_names: brand.category_names ?? [],
     });
+    setSource(brand.category_source ?? (brand.category_slugs?.length ? "manual" : null));
     setDialogOpen(true);
   };
 
@@ -163,6 +175,52 @@ export default function AdminBrandsPage() {
     reader.readAsDataURL(file);
   };
 
+  const categoryOptions = useMemo(
+    () => sortCategories(activeCategories(categories)),
+    [categories],
+  );
+
+  // Products already filed under this brand are the strongest signal of all.
+  const productCategorySlugs = useMemo(() => {
+    const slug = draft.slug || draft.id;
+    if (!slug) return [];
+    return products
+      .filter((product) => product.brand_slug === slug || product.brand_id === slug)
+      .map((product) => product.category_slug || product.category_id)
+      .filter((value): value is string => Boolean(value));
+  }, [products, draft.slug, draft.id]);
+
+  const suggestions = useMemo(
+    () =>
+      detectBrandCategories(
+        { name: draft.name, description: draft.description, productCategorySlugs },
+        categories,
+      ),
+    [draft.name, draft.description, productCategorySlugs, categories],
+  );
+
+  const toggleCategory = (name: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      category_names: prev.category_names.includes(name)
+        ? prev.category_names.filter((value) => value !== name)
+        : [...prev.category_names, name],
+    }));
+    setSource("manual");
+  };
+
+  const applySuggestions = () => {
+    if (!suggestions.length) {
+      toast.info("Nothing in the bio points at a category yet");
+      return;
+    }
+    setDraft((prev) => ({
+      ...prev,
+      category_names: [...new Set([...prev.category_names, ...suggestions.map((item) => item.name)])],
+    }));
+    setSource("manual");
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.name.trim()) {
@@ -173,6 +231,24 @@ export default function AdminBrandsPage() {
     setSaving(true);
     try {
       const slug = (draft.slug.trim() || slugify(draft.name)).toLowerCase();
+      const chosen = draft.category_names
+        .map((label) => categories.find((category) => category.name === label))
+        .filter((category): category is Category => Boolean(category));
+      // Nothing picked by hand: fall back to what the bio points at.
+      const auto = chosen.length
+        ? []
+        : suggestions
+            .map((suggestion) => categories.find((category) => category.slug === suggestion.slug))
+            .filter((category): category is Category => Boolean(category));
+      const resolved = chosen.length ? chosen : auto;
+      const resolvedSource: Brand["category_source"] = chosen.length
+        ? source ?? "manual"
+        : resolved.length
+          ? "auto"
+          : null;
+      const previous = brands.find((brand) => brand.id === draft.id);
+      const now = new Date().toISOString();
+
       await saveBrand({
         id: draft.id || slug,
         name: draft.name.trim(),
@@ -181,6 +257,10 @@ export default function AdminBrandsPage() {
         description: draft.description.trim() || null,
         status: draft.status,
         sort_order: Number(draft.sort_order) || 0,
+        category_slugs: resolved.map((category) => category.slug),
+        category_names: resolved.map((category) => category.name),
+        category_source: resolvedSource,
+        category_updated_at: resolved.length ? now : previous?.category_updated_at,
       });
 
       toast.success(draft.id ? "Brand updated" : "Brand created");
@@ -196,8 +276,14 @@ export default function AdminBrandsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteBrand(deleteTarget.id);
-      toast.success(`Deleted brand "${deleteTarget.name}"`);
+      // Removing a brand removes its products with it, so the catalogue can
+      // never point at a partner that no longer exists.
+      const { deletedProducts } = await deleteBrand(deleteTarget.id);
+      toast.success(
+        deletedProducts
+          ? `Deleted brand "${deleteTarget.name}" and ${deletedProducts} product${deletedProducts === 1 ? "" : "s"}`
+          : `Deleted brand "${deleteTarget.name}"`,
+      );
       setDeleteTarget(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete brand");
@@ -429,6 +515,23 @@ export default function AdminBrandsPage() {
                           No description provided
                         </p>
                       )}
+                      {(brand.category_names ?? []).length ? (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {(brand.category_names ?? []).slice(0, 4).map((name) => (
+                            <span
+                              key={name}
+                              className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-foreground/70"
+                            >
+                              {name}
+                            </span>
+                          ))}
+                          {brand.category_source === "auto" ? (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                              auto
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
@@ -444,6 +547,7 @@ export default function AdminBrandsPage() {
                     <Link
                       href={`/brands/${brand.slug}`}
                       target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 hover:text-primary transition-colors"
                     >
                       Store page <ExternalLink className="h-3 w-3" />
@@ -575,6 +679,87 @@ export default function AdminBrandsPage() {
               />
             </div>
 
+            {/* Categories */}
+            <div className="space-y-2 border-t border-border pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Categories this brand sells</Label>
+                {suggestions.length ? (
+                  <button
+                    type="button"
+                    onClick={applySuggestions}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" /> Apply {suggestions.length} detected
+                  </button>
+                ) : null}
+              </div>
+
+              {draft.category_names.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {draft.category_names.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => toggleCategory(name)}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                    >
+                      {name} <X className="h-3 w-3" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Nothing chosen yet — the bio fills these in when you save, or pick them below.
+                </p>
+              )}
+
+              {suggestions.length ? (
+                <ul className="space-y-1 rounded-lg bg-muted/40 p-2">
+                  <li className="flex items-center gap-1 text-[11px] font-medium text-foreground">
+                    <Sparkles className="h-3 w-3" aria-hidden /> Detected from the bio
+                  </li>
+                  {suggestions.map((suggestion) => (
+                    <li key={suggestion.slug} className="text-[11px] text-muted-foreground">
+                      <span className="font-medium text-foreground">{suggestion.name}</span> —{" "}
+                      {suggestion.reasons.join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <div className="flex flex-wrap gap-1.5">
+                {categoryOptions.length ? (
+                  categoryOptions.map((category) => {
+                    const selected = draft.category_names.includes(category.name);
+                    return (
+                      <button
+                        key={category.slug}
+                        type="button"
+                        onClick={() => toggleCategory(category.name)}
+                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {category.name}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    No categories exist yet — create them in Catalog → Collections.
+                  </p>
+                )}
+              </div>
+
+              {source === "auto" ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Currently filled automatically from the bio. Pick any category to take over.
+                </p>
+              ) : null}
+            </div>
+
             {/* Sort Order & Status */}
             <div className="grid grid-cols-2 gap-4 items-center border-t border-border pt-3">
               <div className="space-y-1.5">
@@ -631,7 +816,21 @@ export default function AdminBrandsPage() {
             <DialogTitle>Delete Brand?</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete brand{" "}
-              <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong>? Products linked to this brand will remain in your catalog but will no longer have this brand partner tag.
+              <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong>?{" "}
+              {(() => {
+                const count =
+                  productCountByBrand[deleteTarget?.slug ?? ""] ??
+                  productCountByBrand[deleteTarget?.id ?? ""] ??
+                  0;
+                return count ? (
+                  <>
+                    Its <strong>{count} product{count === 1 ? "" : "s"}</strong> will be deleted too — a
+                    product is not kept without its brand. This cannot be undone.
+                  </>
+                ) : (
+                  <>It has no products filed under it.</>
+                );
+              })()}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">

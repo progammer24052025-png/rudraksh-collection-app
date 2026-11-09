@@ -17,6 +17,7 @@ import {
   deleteCategory,
   subscribeBrands,
   subscribeCategories,
+  withoutOrphanedBrands,
   type NewOrderInput,
 } from "./firebase";
 import type { Brand, CartItem, Category, Order, Product } from "./types";
@@ -85,16 +86,37 @@ export function filterProducts(products: Product[], filters: ProductFilters = {}
   return list.slice(offset, offset + limit);
 }
 
+/**
+ * The storefront's product list.
+ *
+ * Products are dropped when the brand they point at no longer exists, so a
+ * deleted partner cannot leave shoppable orphans behind. When the brand read
+ * comes back empty we keep the catalogue as-is: a failed or not-yet-seeded
+ * brand node must never blank the shop.
+ */
 export async function fetchProducts(
   filters: ProductFilters = {},
 ): Promise<{ products: Product[]; total: number }> {
-  const all = await fetchAllProducts();
-  const filtered = filterProducts(all, filters);
+  const [all, liveBrands] = await Promise.all([
+    fetchAllProducts(),
+    fetchBrands().catch(() => [] as Brand[]),
+  ]);
+  const visible = liveBrands.length ? withoutOrphanedBrands(all, liveBrands) : all;
+  const filtered = filterProducts(visible, filters);
   return { products: filtered, total: filtered.length };
 }
 
+/** One product, treated as missing when its brand has been deleted. */
 export async function fetchProduct(slug: string): Promise<Product | null> {
-  return fetchProductBySlug(slug);
+  const product = await fetchProductBySlug(slug);
+  if (!product) return null;
+
+  const hasBrand = Boolean(product.brand_id || product.brand_slug);
+  if (!hasBrand) return product;
+
+  const liveBrands = await fetchBrands().catch(() => [] as Brand[]);
+  if (!liveBrands.length) return product;
+  return withoutOrphanedBrands([product], liveBrands)[0] ?? null;
 }
 
 export interface CreateOrderResult {

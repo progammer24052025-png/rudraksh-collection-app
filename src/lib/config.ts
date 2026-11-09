@@ -62,7 +62,39 @@ export const collections = [
   { slug: "occasion-wear", name: "Occasion Wear" },
 ] as const;
 
+/** The three departments the catalogue is browsed by. */
+export const departments = [
+  { slug: "men", name: "Men" },
+  { slug: "women", name: "Women" },
+  { slug: "kids", name: "Kids" },
+] as const;
+
+/**
+ * Categories the admin can seed in one click (Admin → Catalog → Categories).
+ * Departments hang nothing under them; the six collections are nested where
+ * they belong, and the three cross-audience collections sit under all three.
+ */
+export const categorySeed = [
+  { slug: "men", name: "Men", parent_slugs: [] as string[], sort_order: 10 },
+  { slug: "women", name: "Women", parent_slugs: [] as string[], sort_order: 20 },
+  { slug: "kids", name: "Kids", parent_slugs: [] as string[], sort_order: 30 },
+  { slug: "boys-wear", name: "Boys' Wear", parent_slugs: ["kids"], sort_order: 10 },
+  { slug: "girls-wear", name: "Girls' Wear", parent_slugs: ["kids"], sort_order: 20 },
+  { slug: "baby-toddler", name: "Baby & Toddler", parent_slugs: ["kids"], sort_order: 30 },
+  {
+    slug: "everyday-essentials",
+    name: "Everyday Essentials",
+    parent_slugs: ["men", "women", "kids"],
+    sort_order: 40,
+  },
+  { slug: "casual-wear", name: "Casual Wear", parent_slugs: ["men", "women", "kids"], sort_order: 50 },
+  { slug: "occasion-wear", name: "Occasion Wear", parent_slugs: ["men", "women", "kids"], sort_order: 60 },
+] as const;
+
 export const collectionImages: Record<string, string> = {
+  men: "https://images.unsplash.com/photo-1516257984-b1b4d707412e?w=900&h=1125&fit=crop",
+  women: "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=900&h=1125&fit=crop",
+  kids: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900&h=1125&fit=crop",
   "boys-wear": "https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=900&h=1125&fit=crop",
   "girls-wear": "https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=900&h=1125&fit=crop",
   "baby-toddler": "https://images.unsplash.com/photo-1522771930-78848d9293e8?w=900&h=1125&fit=crop",

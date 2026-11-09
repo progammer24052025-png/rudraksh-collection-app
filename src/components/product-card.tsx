@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Heart } from "lucide-react";
 import { motion } from "framer-motion";
-import { type Product, formatPrice } from "@/lib/store-data";
+import { type Product, effectivePrice, formatPrice } from "@/lib/store-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/lib/cart-context";
@@ -20,8 +20,8 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem } = useCart();
   const { toggle, has } = useWishlist();
   const saved = has(product.id);
-  const displayPrice = product.sale_price ?? product.price;
-  const hasDiscount = product.sale_price != null && product.sale_price < product.price;
+  const displayPrice = effectivePrice(product);
+  const hasDiscount = displayPrice < product.price;
 
   const handleWishlist = (event: React.MouseEvent) => {
     event.preventDefault();

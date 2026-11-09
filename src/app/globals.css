@@ -218,3 +218,35 @@
     transition: none !important;
   }
 }
+
+/* ── Printing ──────────────────────────────────────────────────────────────
+   Bills are printed straight from the browser, so only the `.print-area`
+   block survives: everything else is hidden but keeps its layout box, which
+   avoids the reflow that `display: none` causes inside dialogs. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+
+  .print-area {
+    position: absolute !important;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}

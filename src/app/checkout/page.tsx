@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, MapPin, Banknote, Check, Shield, Loader2 } from "lucide-react";
+import { ChevronLeft, MapPin, Banknote, Check, Shield, Loader2, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCart } from "@/lib/cart-context";
-import { formatPrice, createOrder, fetchProducts } from "@/lib/store-data";
+import { effectivePrice, formatPrice, createOrder, fetchProducts } from "@/lib/store-data";
 import { computeTotals, normalizePricing, validateCoupon } from "@/lib/pricing";
 import { logActivity, readCoupon } from "@/lib/firebase";
 import type { Coupon, StoreSettings } from "@/lib/types";
@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
 import { ProgressSteps } from "@/components/kit/steps";
 import { AnimatedTicket } from "@/components/ui/ticket-confirmation-card";
+import { BillDialog } from "@/components/order-bill";
+import { billLines, hasReceipt, money, type BillOrder } from "@/lib/order-document";
 
 type Address = {
   fullName: string;
@@ -79,6 +81,19 @@ function CheckoutContent() {
   const { items, getCartTotal, getProduct, clearCart, setProducts, isHydrated } = useCart();
   const storeConfig = useStore();
   const { user, profile } = useAuth();
+
+  /**
+   * The server derives who we are from a signed ID token. Guests send none and
+   * are written as guest orders; nobody sends a uid in the body any more.
+   */
+  const authHeaders = async (): Promise<Record<string, string>> => {
+    try {
+      const token = await user?.getIdToken();
+      return token ? { authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  };
   const [step, setStep] = useState<"address" | "payment" | "success">("address");
   const [address, setAddress] = useState<Address>({
     fullName: "", phone: "", email: "", address: "", city: "", state: "", pincode: "",
@@ -86,6 +101,10 @@ function CheckoutContent() {
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "razorpay">("cod");
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
+  // Snapshot taken the moment the order is accepted. The cart is cleared right
+  // after, so rendering the confirmation from live cart state would show ₹0.
+  const [placed, setPlaced] = useState<BillOrder | null>(null);
+  const [billOpen, setBillOpen] = useState(false);
 
   const [coupon, setCoupon] = useState<Coupon | null>(null);
   const [couponInput, setCouponInput] = useState("");
@@ -124,14 +143,12 @@ function CheckoutContent() {
     () =>
       items.map((item) => {
         const product = getProduct(item.productId);
-        const price =
-          product && typeof product.sale_price === "number" && product.sale_price > 0
-            ? product.sale_price
-            : product?.price ?? 0;
         return {
           productId: item.productId,
           name: product?.name ?? "Item",
-          price,
+          // Same rule the server charges with, or the customer could be quoted
+          // a price the gateway will not bill.
+          price: product ? effectivePrice(product) : 0,
           quantity: item.quantity,
         };
       }),
@@ -142,6 +159,45 @@ function CheckoutContent() {
   const cartTotal = totals.subtotal;
   const shipping = totals.shipping;
   const grandTotal = totals.total;
+
+  /**
+   * The bill for the order just accepted, captured before the cart is emptied.
+   *
+   * Payment ends up `paid` only when the gateway gave us a real payment id, so
+   * a cash order can never be written — or rendered — as settled.
+   */
+  const snapshotBill = (reference: string, paymentId: string | null): BillOrder => ({
+    order_number: reference,
+    created_at: new Date().toISOString(),
+    customer_name: address.fullName,
+    phone: address.phone,
+    email: address.email || null,
+    address: address.address,
+    city: address.city,
+    state: address.state,
+    pincode: address.pincode,
+    items: items.map((item) => {
+      const product = getProduct(item.productId);
+      return {
+        name: product?.name ?? "Item",
+        brand: product?.brand_name ?? null,
+        size: item.size,
+        color: item.color,
+        quantity: item.quantity,
+        price: product ? effectivePrice(product) : 0,
+      };
+    }),
+    subtotal: totals.subtotal,
+    discount: totals.discount,
+    tax: totals.tax,
+    tax_rate: pricing.tax.enabled ? pricing.tax.rate : 0,
+    coupon_code: totals.couponCode,
+    shipping: totals.shipping,
+    total: totals.total,
+    payment_method: paymentMethod,
+    payment_status: paymentId ? "paid" : "pending",
+    razorpay_payment_id: paymentId,
+  });
 
   async function applyCoupon() {
     const code = couponInput.trim().toUpperCase();
@@ -231,9 +287,8 @@ function CheckoutContent() {
       // service account is configured, writes the order itself.
       const response = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
-          user_id: user?.uid ?? null,
           coupon_code: coupon?.code ?? null,
           payment_method: paymentMethod,
           payment_proof: proof,
@@ -260,6 +315,7 @@ function CheckoutContent() {
         secure?: boolean;
         error?: string;
         payment_id?: string;
+        payment?: { id: string; status: string } | null;
         order?: { id: string; order_number: string } | null;
       };
 
@@ -279,6 +335,8 @@ function CheckoutContent() {
 
       if (data.secure && data.order) {
         setOrderNumber(data.order.order_number);
+        // Only a verified gateway payment id makes this a paid order.
+        setPlaced(snapshotBill(data.order.order_number, data.payment?.id ?? null));
         clearCart();
         setStep("success");
         toast.success("Order placed successfully!");
@@ -330,6 +388,8 @@ function CheckoutContent() {
           href: "/track-order",
         });
         setOrderNumber(result.order.order_number);
+        // Browser-written order: no gateway proof exists, so it is never paid.
+        setPlaced(snapshotBill(result.order.order_number, null));
         clearCart();
         setStep("success");
         toast.success("Order placed successfully!");
@@ -362,9 +422,8 @@ function CheckoutContent() {
 
       const priced = await fetch("/api/payments", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
-          user_id: user?.uid ?? null,
           coupon_code: coupon?.code ?? null,
           items: items.map((item) => ({
             productId: item.productId,
@@ -444,34 +503,45 @@ function CheckoutContent() {
   };
 
   if (step === "success") {
+    const bill = placed;
+    // The receipt exists only for a settled online payment. A cash order gets a
+    // bill and nothing that reads like "paid".
+    const paidOnline = bill ? hasReceipt(bill) : false;
+
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-12 sm:px-6">
         <AnimatedTicket
-          ticketId={orderNumber ?? "—"}
-          amount={totals.total}
-          date={new Date()}
-          cardHolder={address.fullName || "Guest"}
-          paymentLabel={paymentMethod === "cod" ? "Cash on delivery" : "Paid online"}
-          barcodeValue={orderNumber ?? "RUDRAKSH"}
-          lines={[
-            { label: "Subtotal", value: formatPrice(totals.subtotal) },
-            ...(totals.discount > 0
-              ? [{ label: totals.couponCode ? `Discount (${totals.couponCode})` : "Discount", value: `−${formatPrice(totals.discount)}` }]
-              : []),
-            { label: "Shipping", value: totals.shipping === 0 ? "Free" : formatPrice(totals.shipping), muted: totals.shipping === 0 },
-            { label: "Total", value: formatPrice(totals.total) },
-          ]}
+          ticketId={bill?.order_number ?? orderNumber ?? "—"}
+          amount={bill?.total ?? 0}
+          date={bill?.created_at ? new Date(bill.created_at) : new Date()}
+          cardHolder={bill?.customer_name || "Guest"}
+          paymentLabel={paidOnline ? "Paid online" : "Cash on delivery"}
+          amountLabel={paidOnline ? "Amount paid" : "Amount due on delivery"}
+          barcodeValue={bill?.order_number ?? "RUDRAKSH"}
+          lines={bill ? billLines(bill) : []}
           note={
-            pricing.tax.enabled
-              ? `Includes ${formatPrice(totals.tax)} ${pricing.tax.label}. We'll contact you shortly to confirm your order.`
-              : "We'll contact you shortly to confirm your order."
+            bill
+              ? [
+                  bill.tax ? `Includes ${money(bill.tax)} GST.` : null,
+                  paidOnline
+                    ? "Payment received — your receipt is on the bill."
+                    : `Pay ${money(bill.total)} to the delivery partner. This is a bill, not a receipt.`,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              : undefined
           }
         />
 
         <div className="mt-8 flex w-full max-w-sm flex-col gap-3">
-          {orderNumber && (
-            <Button asChild>
-              <Link href={`/track-order?order=${orderNumber}`}>Track this order</Link>
+          {bill && (
+            <Button onClick={() => setBillOpen(true)}>
+              <FileText className="mr-2 h-4 w-4" /> View bill
+            </Button>
+          )}
+          {bill?.order_number && (
+            <Button variant="outline" asChild>
+              <Link href={`/track-order?order=${bill.order_number}`}>Track this order</Link>
             </Button>
           )}
           <Button variant="outline" asChild>
@@ -481,6 +551,8 @@ function CheckoutContent() {
             <Link href="/account">View Orders</Link>
           </Button>
         </div>
+
+        <BillDialog order={bill} open={billOpen} onOpenChange={setBillOpen} />
       </div>
     );
   }

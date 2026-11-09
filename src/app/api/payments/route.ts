@@ -7,6 +7,13 @@
  *        exactly that amount. No order is written here: nothing is recorded
  *        until `/api/checkout` has verified the payment.
  */
+import {
+  clientIp,
+  crossOriginResponse,
+  isSameOrigin,
+  rateLimit,
+  tooManyRequestsResponse,
+} from "@/lib/server/http";
 import { isSecureCheckout } from "@/lib/server/rtdb-admin";
 import { orderNumber, priceCart, type CartRequest } from "@/lib/server/price-cart";
 import {
@@ -36,6 +43,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return crossOriginResponse();
+
+  // Every call creates a real gateway order against the store's account, so an
+  // unthrottled loop here is somebody else spending our API quota.
+  const gate = rateLimit(`payments:${clientIp(request)}`, 15, 10 * 60 * 1000);
+  if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
+
   if (!razorpayConfigured()) {
     return Response.json(
       { ok: false, error: "Online payment is not configured yet." },
