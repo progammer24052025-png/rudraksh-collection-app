@@ -29,6 +29,8 @@ import {
   welcomeEmail,
   type EmailOrder,
 } from "@/lib/server/email-templates";
+import { clientIp, isSameOrigin, rateLimit, tooManyRequestsResponse } from "@/lib/server/http";
+import { bearer, verifyIdToken, type Caller } from "@/lib/server/id-token";
 import type { Order, OrderStatus, OrderTracking } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +46,6 @@ const DB_ROOT =
   process.env.FIREBASE_DB_ROOT ||
   process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT ||
   "rudraksh";
-const API_KEY =
-  process.env.FIREBASE_API_KEY ||
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-  "";
 
 const ORDER_STATUSES: OrderStatus[] = [
   "placed",
@@ -77,58 +75,7 @@ function reserve(key: string): boolean {
   return true;
 }
 
-const hits = new Map<string, { count: number; resetAt: number }>();
-
-function allow(ip: string): boolean {
-  const now = Date.now();
-  const entry = hits.get(ip);
-  if (!entry || now > entry.resetAt) {
-    if (hits.size > 2000) hits.clear();
-    hits.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= 12;
-}
-
 // ── Firebase helpers (REST, no admin SDK) ──────────────────
-type Caller = { uid: string; email: string | null; name: string | null };
-
-function bearer(request: Request): string | null {
-  const header = request.headers.get("authorization") || "";
-  if (!header.toLowerCase().startsWith("bearer ")) return null;
-  const token = header.slice(7).trim();
-  return token || null;
-}
-
-/** Verifies a Firebase ID token with the public web API key. */
-async function verifyIdToken(idToken: string): Promise<Caller | null> {
-  if (!API_KEY) return null;
-  try {
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-        cache: "no-store",
-      },
-    );
-    if (!response.ok) return null;
-    const data = (await response.json()) as {
-      users?: { localId?: string; email?: string; displayName?: string }[];
-    };
-    const user = data.users?.[0];
-    if (!user?.localId) return null;
-    return {
-      uid: user.localId,
-      email: user.email ?? null,
-      name: user.displayName ?? null,
-    };
-  } catch {
-    return null;
-  }
-}
 
 async function readPath<T>(
   path: string,
@@ -181,14 +128,6 @@ async function findOrder(
   return first?.order_number === orderNumber ? first : null;
 }
 
-function clientIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
-
 /**
  * Diagnostics. GET /api/email reports whether email is wired up;
  * GET /api/email?check=smtp additionally logs in to the mailbox and hangs up.
@@ -201,7 +140,8 @@ export async function GET(request: Request) {
     return json({ ok: true, configured, sender: mailSender() });
   }
 
-  if (!allow(clientIp(request))) return json({ ok: false, error: "Too many requests." }, 429);
+  const gate = rateLimit(`email:${clientIp(request)}`, 12, WINDOW_MS);
+  if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
   const result = await verifySmtp();
   return json(
     { ok: result.ok, configured, sender: mailSender(), error: result.error },
@@ -214,7 +154,12 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "Email is not configured." }, 503);
   }
 
-  if (!allow(clientIp(request))) return json({ ok: false, error: "Too many requests." }, 429);
+  if (!isSameOrigin(request)) {
+    return json({ ok: false, error: "This request came from another site." }, 403);
+  }
+
+  const gate = rateLimit(`email:${clientIp(request)}`, 12, WINDOW_MS);
+  if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return json({ ok: false, error: "Could not read the request." }, 400);

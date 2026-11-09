@@ -8,6 +8,7 @@
  */
 import {
   computeTotals,
+  effectivePrice,
   normalizePricing,
   type PricingConfig,
   type PricingLine,
@@ -45,6 +46,8 @@ export type PricedCart = {
   coupon: Coupon | null;
   /** The coupon that actually applied — null when none was sent or it was rejected. */
   appliedCoupon: Coupon | null;
+  /** The database key `appliedCoupon` lives under, which is not always its `code`. */
+  couponKey: string | null;
   settings: StoreSettings;
 };
 
@@ -67,11 +70,20 @@ export async function publicGet<T>(path: string): Promise<T | null> {
   return (await response.json()) as T | null;
 }
 
+/**
+ * Order numbers double as the guest tracking secret, so the suffix must not be
+ * guessable: eight characters from a 32-symbol alphabet (≈10¹² per day) drawn
+ * from the CSPRNG. The alphabet drops 0/O/1/I so a customer can read it aloud.
+ */
+const ORDER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 export function orderNumber(now = new Date()): string {
   const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
     now.getDate(),
   ).padStart(2, "0")}`;
-  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const random = Array.from(bytes, (byte) => ORDER_ALPHABET[byte % ORDER_ALPHABET.length]).join("");
   return `RC-${date}-${random}`;
 }
 
@@ -98,10 +110,27 @@ export async function priceCart(body: CartRequest): Promise<PricedCartResult> {
         error: "One of the items is no longer available. Refresh your bag.",
       };
     }
-    const price =
-      typeof product.sale_price === "number" && product.sale_price > 0
-        ? product.sale_price
-        : product.price;
+    // Same helper the cart uses, so what the customer saw is what is charged.
+    const price = effectivePrice(product);
+
+    // Stock is enforced here because this is the only place both money paths
+    // (COD and Razorpay) agree on what the bag contains. A product without a
+    // numeric stock is treated as unlimited rather than unsellable.
+    const stock = typeof product.stock === "number" ? product.stock : null;
+    if (stock !== null && stock <= 0) {
+      return {
+        ok: false,
+        status: 409,
+        error: `“${product.name}” is sold out. Please remove it from your bag.`,
+      };
+    }
+    if (stock !== null && quantity > stock) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Only ${stock} left of “${product.name}”. Please lower the quantity.`,
+      };
+    }
 
     lines.push({ productId: item.productId, name: product.name, price, quantity });
     orderItems.push({
@@ -124,14 +153,22 @@ export async function priceCart(body: CartRequest): Promise<PricedCartResult> {
   });
 
   let coupon: Coupon | null = null;
+  let couponKey: string | null = null;
   const code = (body.coupon_code ?? "").trim().toUpperCase();
   if (code) {
     const coupons = (await publicGet<Record<string, Coupon>>("coupons")) ?? {};
-    coupon = coupons[code] ?? null;
-    if (!coupon) {
-      // Case-insensitive fallback for codes stored with mixed case.
+    if (coupons[code]) {
+      coupon = coupons[code];
+      couponKey = code;
+    } else {
+      // Case-insensitive fallback for codes stored with mixed case. The key we
+      // found is what the usage counter must be written to — writing to the
+      // coupon's own `code` field would create a second, empty node.
       const match = Object.entries(coupons).find(([key]) => key.toUpperCase() === code);
-      coupon = match ? match[1] : null;
+      if (match) {
+        coupon = match[1];
+        couponKey = match[0];
+      }
     }
 
     if (coupon) {
@@ -175,5 +212,8 @@ export async function priceCart(body: CartRequest): Promise<PricedCartResult> {
     };
   }
 
-  return { ok: true, cart: { totals, config, orderItems, coupon, appliedCoupon, settings } };
+  return {
+    ok: true,
+    cart: { totals, config, orderItems, coupon, appliedCoupon, couponKey, settings },
+  };
 }

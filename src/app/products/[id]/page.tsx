@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCart } from "@/lib/cart-context";
-import { fetchProduct, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
+import { effectivePrice, fetchProduct, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
 import { useStore } from "@/lib/store-context";
 import { toast } from "sonner";
 
@@ -75,8 +75,8 @@ function ProductDetailContent() {
     );
   }
 
-  const displayPrice = product.sale_price ?? product.price;
-  const hasDiscount = product.sale_price != null && product.sale_price < product.price;
+  const displayPrice = effectivePrice(product);
+  const hasDiscount = displayPrice < product.price;
 
   const handleAddToCart = () => {
     if (product.sizes.length > 0 && !selectedSize) {

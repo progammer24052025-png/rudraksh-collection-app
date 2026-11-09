@@ -161,6 +161,19 @@ function CheckoutContent() {
   const { items, getCartTotal, getProduct, clearCart, setProducts, isHydrated } = useCart();
   const storeConfig = useStore();
   const { user, profile, loading, loginWithGoogle } = useAuth();
+
+  /**
+   * The order routes identify us by a signed ID token, not by a uid typed into
+   * the request body — that field could name anybody's account.
+   */
+  const authHeaders = async (): Promise<Record<string, string>> => {
+    try {
+      const token = await user?.getIdToken();
+      return token ? { authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  };
   const [step, setStep] = useState<"address" | "payment" | "success">("address");
   const [address, setAddress] = useState<Address>({
     fullName: "", phone: "", email: "", address: "", city: "", state: "", pincode: "",
@@ -453,7 +466,7 @@ function CheckoutContent() {
       // service account is configured, writes the order itself.
       const response = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           user_id: user?.uid ?? null,
           coupon_code: coupon?.code ?? null,
@@ -522,10 +535,14 @@ function CheckoutContent() {
         shipping: totals.shipping,
         total: totals.total,
         payment_method: paymentMethod,
-        payment_status: proof ? "paid" : "pending",
+        // A browser-written order is never self-declared as paid: the database
+        // rules cannot verify a gateway signature, so "paid" from the client is
+        // forgeable. The payment ids still travel with the order and the server
+        // marks it paid itself whenever the service account is configured.
+        payment_status: "pending",
         razorpay_order_id: proof?.razorpay_order_id ?? null,
         razorpay_payment_id: proof?.razorpay_payment_id ?? null,
-        order_status: proof ? "confirmed" : "placed",
+        order_status: "placed",
       });
 
       if (result.ok && result.order) {
@@ -559,7 +576,7 @@ function CheckoutContent() {
 
       const priced = await fetch("/api/payments", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           user_id: user?.uid ?? null,
           coupon_code: coupon?.code ?? null,

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { effectivePrice } from "./pricing";
 import type { Product, CartItem } from "./store-data";
 
 type CartContextType = {
@@ -84,7 +85,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const getCartTotal = useCallback(() => {
     return items.reduce((total, item) => {
       const product = products.find((p) => p.id === item.productId);
-      const price = product?.sale_price ?? product?.price ?? 0;
+      // Never `sale_price ?? price`: a ₹0 sale price would show the bag as free
+      // while the server charges the list price.
+      const price = product ? effectivePrice(product) : 0;
       return total + price * item.quantity;
     }, 0);
   }, [items, products]);

@@ -1,10 +1,19 @@
 import {
+  adminAdjustNumber,
   adminGet,
   adminPush,
   adminSet,
   adminUpdate,
   isSecureCheckout,
 } from "@/lib/server/rtdb-admin";
+import {
+  clientIp,
+  crossOriginResponse,
+  isSameOrigin,
+  rateLimit,
+  tooManyRequestsResponse,
+} from "@/lib/server/http";
+import { callerFrom } from "@/lib/server/id-token";
 import { digits, orderNumber, priceCart, type CartRequest } from "@/lib/server/price-cart";
 import {
   captureRazorpayPayment,
@@ -39,6 +48,14 @@ type CheckoutBody = CartRequest & {
 };
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return crossOriginResponse();
+
+  // An order costs a database write and, for COD, a fulfilment task. Six per
+  // ten minutes is far more than a real customer needs and far less than a
+  // script wants.
+  const gate = rateLimit(`checkout:${clientIp(request)}`, 6, 10 * 60 * 1000);
+  if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
+
   let body: CheckoutBody;
   try {
     body = (await request.json()) as CheckoutBody;
@@ -46,10 +63,17 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Could not read the order." }, { status: 400 });
   }
 
+  // Ownership comes from a token Google verified, never from the body: a
+  // body-supplied uid would let anyone write an order, an order index entry and
+  // an activity notification into somebody else's account.
+  const caller = await callerFrom(request);
+  const uid = caller?.uid ?? null;
+
   const customer = body.customer ?? {};
 
-  const uid = body.user_id?.trim();
-  if (!uid || uid === "guest") {
+  // Checkout is signed-in only. The uid above is the token's, so the "please
+  // sign in" rule cannot be satisfied by typing somebody else's id.
+  if (!uid) {
     return Response.json(
       { ok: false, error: "Authentication required: Please sign in to place an order." },
       { status: 401 },
@@ -80,7 +104,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { totals, config, orderItems, appliedCoupon } = priced.cart;
+  const { totals, config, orderItems, appliedCoupon, couponKey } = priced.cart;
   const method = body.payment_method === "razorpay" ? "razorpay" : "cod";
   const secure = isSecureCheckout();
 
@@ -188,6 +212,29 @@ export async function POST(request: Request) {
     });
   }
 
+  // Claim one use of a limited coupon before writing the order, and give it back
+  // if the order never lands. Counting after the write would let two concurrent
+  // checkouts spend the last use twice.
+  let couponReserved = false;
+  if (appliedCoupon && couponKey) {
+    const maxUses = typeof appliedCoupon.max_uses === "number" ? appliedCoupon.max_uses : 0;
+    if (maxUses > 0) {
+      try {
+        const used = await adminAdjustNumber(`coupons/${couponKey}/used_count`, 1);
+        if (used !== null && used > maxUses) {
+          await adminAdjustNumber(`coupons/${couponKey}/used_count`, -1);
+          return Response.json(
+            { ok: false, error: "That code has just been fully redeemed.", totals },
+            { status: 409 },
+          );
+        }
+        couponReserved = used !== null;
+      } catch (error) {
+        console.error("Coupon reservation failed:", error);
+      }
+    }
+  }
+
   const now = new Date();
   const iso = now.toISOString();
   const history = [
@@ -197,7 +244,7 @@ export async function POST(request: Request) {
 
   const order: Omit<Order, "id"> = {
     order_number: orderNumber(now),
-    user_id: body.user_id ?? null,
+    user_id: uid,
     customer_name: customer.name.trim(),
     phone: digits(customer.phone ?? ""),
     email: customer.email?.trim() || null,
@@ -227,9 +274,10 @@ export async function POST(request: Request) {
 
   try {
     const orderId = await adminPush("orders", order);
-    const uid = body.user_id ?? "guest";
 
-    await adminSet(`ordersByUser/${uid}/${orderId}`, { order_number: order.order_number });
+    await adminSet(`ordersByUser/${uid ?? "guest"}/${orderId}`, {
+      order_number: order.order_number,
+    });
     await adminSet(`tracking/${order.order_number}`, {
       order_number: order.order_number,
       order_status: order.order_status,
@@ -253,31 +301,54 @@ export async function POST(request: Request) {
       });
     }
 
+    // One redemption per user and per phone, keyed by the verified uid. The
+    // coupon's own used_count is handled above by the atomic reservation, so it
+    // is deliberately not incremented a second time here.
     if (appliedCoupon) {
-      await adminUpdate(`coupons/${appliedCoupon.code}`, {
-        used_count: (appliedCoupon.used_count ?? 0) + 1,
-        updated_at: iso,
-      });
-
-      if (body.user_id) {
-        const phone10 = digits(customer.phone ?? "").slice(-10);
-        const record = {
-          order_id: orderId,
-          order_number: order.order_number,
-          user_id: body.user_id,
-          phone: phone10,
-          used_at: iso,
-        };
-        await adminSet(`couponRedemptions/${appliedCoupon.code}/${body.user_id}`, record);
-        await adminSet(`userCoupons/${body.user_id}/${appliedCoupon.code}`, record);
-        if (phone10.length === 10) {
-          await adminSet(`couponRedemptionsByPhone/${appliedCoupon.code}/${phone10}`, record);
-        }
+      const phone10 = digits(customer.phone ?? "").slice(-10);
+      const record = {
+        order_id: orderId,
+        order_number: order.order_number,
+        user_id: uid,
+        phone: phone10,
+        used_at: iso,
+      };
+      await adminSet(`couponRedemptions/${appliedCoupon.code}/${uid}`, record);
+      await adminSet(`userCoupons/${uid}/${appliedCoupon.code}`, record);
+      if (phone10.length === 10) {
+        await adminSet(`couponRedemptionsByPhone/${appliedCoupon.code}/${phone10}`, record);
       }
     }
 
-    if (body.user_id) {
-      await adminPush(`activity/${body.user_id}`, {
+    // Take the stock out now that the order exists. A line whose product has no
+    // numeric stock is left alone (unlimited), and a failed adjustment never
+    // fails the order — the customer has already paid or committed to pay.
+    let stockTaken = false;
+    for (const line of orderItems) {
+      if (!line.productId) continue;
+      try {
+        const left = await adminAdjustNumber(`products/${line.productId}/stock`, -line.quantity);
+        if (left !== null) stockTaken = true;
+      } catch (error) {
+        console.warn("Stock adjustment failed:", line.productId, error);
+      }
+    }
+    if (stockTaken) {
+      // Only orders that actually moved stock may put it back on cancellation.
+      await adminUpdate(`orders/${orderId}`, { stock_decremented: true });
+    }
+
+    // Unlimited coupons were already incremented above only when limited.
+    if (couponKey && !couponReserved) {
+      try {
+        await adminAdjustNumber(`coupons/${couponKey}/used_count`, 1);
+      } catch (error) {
+        console.warn("Coupon usage increment failed:", couponKey, error);
+      }
+    }
+
+    if (uid) {
+      await adminPush(`activity/${uid}`, {
         type: "order",
         label: `Order ${order.order_number} placed`,
         meta: `₹${order.total.toLocaleString("en-IN")}`,
@@ -295,6 +366,14 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Secure checkout failed:", error);
+    // The order did not land, so the coupon use we claimed must go back.
+    if (couponReserved && couponKey) {
+      try {
+        await adminAdjustNumber(`coupons/${couponKey}/used_count`, -1);
+      } catch {
+        /* the counter can be corrected by hand from the coupon screen */
+      }
+    }
     if (payment) {
       // Money has moved but the order does not exist yet: surface the payment id
       // so the customer can quote it and we can reconcile instead of re-charging.

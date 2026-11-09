@@ -45,6 +45,25 @@ export interface Totals {
   freeShippingRemaining: number;
 }
 
+/**
+ * The price actually charged for one unit.
+ *
+ * A sale price only counts when it is a positive number below the list
+ * price — a stray `0` (or a "sale" above MRP) is bad data, not a giveaway.
+ * The server reprices with this same function, so the cart total and the
+ * amount charged can never disagree.
+ */
+export function effectivePrice(product: {
+  price: number;
+  sale_price?: number | null;
+}): number {
+  const list = Number(product?.price);
+  const safeList = Number.isFinite(list) ? list : 0;
+  const sale = product?.sale_price;
+  if (typeof sale === "number" && sale > 0 && sale < safeList) return sale;
+  return safeList;
+}
+
 export const DEFAULT_PRICING: PricingConfig = {
   freeShippingThreshold: DEFAULT_FREE_SHIPPING_THRESHOLD,
   shippingFee: DEFAULT_SHIPPING_FEE,

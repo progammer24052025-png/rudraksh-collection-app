@@ -1,19 +1,20 @@
 // ─────────────────────────────────────────────────────────────
-// Admin information architecture, in one place.
+// Admin navigation model.
 //
-// Six top-level groups, each holding its own sub-tabs. Adding a screen means
-// adding one line here — the header, the mobile drawer and the sub-tab bar all
-// read from this file, so they can never drift apart.
+// The console is grouped rather than flat: five screens under Catalog
+// would be an unusable row of links. A group with a single screen renders
+// as a plain link; anything with more renders as a menu plus the sub-tab
+// bar in `components/admin-subtabs`.
 // ─────────────────────────────────────────────────────────────
 
-import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
-  Megaphone,
+  Mail,
   Package,
   Settings,
   ShoppingBag,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 
 export type AdminTab = {
@@ -24,9 +25,8 @@ export type AdminTab = {
 export type AdminGroup = {
   key: string;
   label: string;
-  icon: LucideIcon;
-  /** Short line used on the dashboard launcher. */
   description: string;
+  icon: LucideIcon;
   tabs: AdminTab[];
 };
 
@@ -34,15 +34,15 @@ export const ADMIN_GROUPS: AdminGroup[] = [
   {
     key: "dashboard",
     label: "Dashboard",
+    description: "Orders, revenue and stock at a glance",
     icon: LayoutDashboard,
-    description: "Today at a glance",
     tabs: [{ label: "Overview", href: "/admin/dashboard" }],
   },
   {
     key: "catalog",
     label: "Catalog",
-    icon: Package,
     description: "Products, collections and brands",
+    icon: Package,
     tabs: [
       { label: "Products", href: "/admin/products" },
       { label: "Collections", href: "/admin/collections" },
@@ -52,58 +52,60 @@ export const ADMIN_GROUPS: AdminGroup[] = [
   {
     key: "sales",
     label: "Sales",
+    description: "Orders, coupons and storefront banners",
     icon: ShoppingBag,
-    description: "Orders and discount codes",
     tabs: [
       { label: "Orders", href: "/admin/orders" },
       { label: "Coupons", href: "/admin/coupons" },
+      { label: "Banners", href: "/admin/banners" },
     ],
   },
   {
     key: "content",
     label: "Content",
-    icon: Megaphone,
-    description: "Banners and customer messages",
-    tabs: [
-      { label: "Banners", href: "/admin/banners" },
-      { label: "Messages", href: "/admin/messages" },
-    ],
+    description: "Customer messages from the contact form",
+    icon: Mail,
+    tabs: [{ label: "Messages", href: "/admin/messages" }],
   },
   {
     key: "people",
     label: "People",
+    description: "Store team and access requests",
     icon: Users,
-    description: "Who can run the store",
     tabs: [{ label: "Team", href: "/admin/team" }],
   },
   {
     key: "settings",
     label: "Settings",
+    description: "Contact details, shipping and hours",
     icon: Settings,
-    description: "Store details and email",
-    tabs: [{ label: "Store", href: "/admin/settings" }],
+    tabs: [{ label: "Store settings", href: "/admin/settings" }],
   },
 ];
 
-/** `/admin/products` and `/admin/products/p_123` both belong to the same tab. */
-export function isTabActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
+/**
+ * True when `href` is the current screen. A tab stays active on its own
+ * detail routes: `/admin/products/abc` keeps the Products tab lit.
+ */
+export function isTabActive(pathname: string | null | undefined, href: string): boolean {
+  const path = (pathname ?? "").replace(/\/+$/, "") || "/";
+  const target = (href ?? "").replace(/\/+$/, "");
+  if (!target) return false;
+  return path === target || path.startsWith(`${target}/`);
 }
 
-export function tabForPath(group: AdminGroup, pathname: string): AdminTab | undefined {
-  // Longest href wins, so a nested screen never resolves to its parent tab.
-  return [...group.tabs]
-    .sort((a, b) => b.href.length - a.href.length)
-    .find((tab) => isTabActive(pathname, tab.href));
-}
+/** The group that owns the current path, longest matching tab wins. */
+export function groupForPath(pathname: string | null | undefined): AdminGroup | null {
+  let best: { group: AdminGroup; length: number } | null = null;
 
-export function groupForPath(pathname: string): AdminGroup | undefined {
-  return ADMIN_GROUPS.find((group) => Boolean(tabForPath(group, pathname)));
-}
+  for (const group of ADMIN_GROUPS) {
+    for (const tab of group.tabs) {
+      if (!isTabActive(pathname, tab.href)) continue;
+      if (!best || tab.href.length > best.length) {
+        best = { group, length: tab.href.length };
+      }
+    }
+  }
 
-/** Groups with more than one screen get a sub-tab bar; single screens do not. */
-export function tabsForPath(pathname: string): { group: AdminGroup; tabs: AdminTab[] } | null {
-  const group = groupForPath(pathname);
-  if (!group || group.tabs.length < 2) return null;
-  return { group, tabs: group.tabs };
+  return best?.group ?? null;
 }

@@ -276,8 +276,14 @@ export default function AdminBrandsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteBrand(deleteTarget.id);
-      toast.success(`Deleted brand "${deleteTarget.name}"`);
+      // Removing a brand removes its products with it, so the catalogue can
+      // never point at a partner that no longer exists.
+      const { deletedProducts } = await deleteBrand(deleteTarget.id);
+      toast.success(
+        deletedProducts
+          ? `Deleted brand "${deleteTarget.name}" and ${deletedProducts} product${deletedProducts === 1 ? "" : "s"}`
+          : `Deleted brand "${deleteTarget.name}"`,
+      );
       setDeleteTarget(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete brand");
@@ -541,6 +547,7 @@ export default function AdminBrandsPage() {
                     <Link
                       href={`/brands/${brand.slug}`}
                       target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 hover:text-primary transition-colors"
                     >
                       Store page <ExternalLink className="h-3 w-3" />
@@ -809,7 +816,21 @@ export default function AdminBrandsPage() {
             <DialogTitle>Delete Brand?</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete brand{" "}
-              <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong>? Products linked to this brand will remain in your catalog but will no longer have this brand partner tag.
+              <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong>?{" "}
+              {(() => {
+                const count =
+                  productCountByBrand[deleteTarget?.slug ?? ""] ??
+                  productCountByBrand[deleteTarget?.id ?? ""] ??
+                  0;
+                return count ? (
+                  <>
+                    Its <strong>{count} product{count === 1 ? "" : "s"}</strong> will be deleted too — a
+                    product is not kept without its brand. This cannot be undone.
+                  </>
+                ) : (
+                  <>It has no products filed under it.</>
+                );
+              })()}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">

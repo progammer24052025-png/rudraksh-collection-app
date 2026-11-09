@@ -140,6 +140,11 @@ export interface TicketProps extends React.HTMLAttributes<HTMLDivElement> {
   icon?: React.ReactNode;
   /** e.g. "Cash on delivery" — replaces the card-network badge of the reference. */
   paymentLabel?: string;
+  /**
+   * Wording above the amount. Cash orders must not say "paid", so callers pass
+   * "Amount due on delivery" for them.
+   */
+  amountLabel?: string;
   /** Itemised bill rows (subtotal, discount, GST…). */
   lines?: TicketLine[];
   /** Small print under the barcode. */
@@ -160,6 +165,7 @@ const AnimatedTicket = React.forwardRef<HTMLDivElement, TicketProps>(
       barcodeValue,
       icon,
       paymentLabel = "Cash on delivery",
+      amountLabel = "Amount paid",
       lines,
       note,
       celebrate = true,
@@ -229,7 +235,7 @@ const AnimatedTicket = React.forwardRef<HTMLDivElement, TicketProps>(
                 <p className="font-mono font-medium">{ticketId}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Amount paid</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{amountLabel}</p>
                 <p className="text-lg font-semibold">{formattedAmount}</p>
               </div>
             </div>
@@ -254,7 +260,7 @@ const AnimatedTicket = React.forwardRef<HTMLDivElement, TicketProps>(
 
             <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-4">
               <div className="flex h-9 w-12 items-center justify-center rounded bg-background text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {last4Digits ? `••${last4Digits}` : "COD"}
+                {last4Digits ?? (paymentLabel.toLowerCase().includes("cash") ? "COD" : "PAID")}
               </div>
               <div className="text-left">
                 <p className="font-semibold">{cardHolder}</p>

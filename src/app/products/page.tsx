@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchProducts, type Product } from "@/lib/store-data";
+import { effectivePrice, fetchProducts, type Product } from "@/lib/store-data";
 import { brands } from "@/lib/config";
 import { fetchBrands, fetchCategories } from "@/lib/firebase";
 import type { Brand, Category } from "@/lib/types";
@@ -113,16 +113,16 @@ function ProductsContent() {
       filtered = filtered.filter(p => (p.sizes ?? []).some(s => selectedSizes.includes(s)));
     }
     filtered = filtered.filter(p => {
-      const price = p.sale_price ?? p.price;
+      const price = effectivePrice(p);
       return price >= priceRange[0] && price <= priceRange[1];
     });
 
     switch (sortBy) {
       case "price-low":
-        filtered.sort((a, b) => (a.sale_price ?? a.price) - (b.sale_price ?? b.price));
+        filtered.sort((a, b) => effectivePrice(a) - effectivePrice(b));
         break;
       case "price-high":
-        filtered.sort((a, b) => (b.sale_price ?? b.price) - (a.sale_price ?? a.price));
+        filtered.sort((a, b) => effectivePrice(b) - effectivePrice(a));
         break;
       case "newest":
       default:

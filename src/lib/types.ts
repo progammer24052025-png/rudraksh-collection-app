@@ -132,6 +132,8 @@ export interface Order {
   razorpay_payment_id?: string | null;
   order_status: OrderStatus;
   notes?: string | null;
+  /** True when the server removed these units from stock for this order. */
+  stock_decremented?: boolean;
   status_history: OrderStatusEvent[];
   created_at: string;
   updated_at: string;

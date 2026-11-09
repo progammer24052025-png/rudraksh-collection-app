@@ -33,12 +33,23 @@ export type EmailOrder = {
   items?: EmailOrderItem[];
   subtotal?: number;
   discount?: number;
+  tax?: number;
+  tax_rate?: number;
   shipping?: number;
   total: number;
   payment_method?: "cod" | "razorpay" | null;
+  payment_status?: string | null;
+  razorpay_payment_id?: string | null;
   order_status?: OrderStatus;
   created_at?: string | null;
 };
+
+/**
+ * A receipt is proof money moved. Cash on delivery has none, so every
+ * "paid" block in these emails goes through this check first.
+ */
+const isPaidOnline = (order: EmailOrder) =>
+  order.payment_method === "razorpay" && order.payment_status === "paid";
 
 const INK = "#2D2A26";
 const CREAM = "#FAF7F2";
@@ -172,12 +183,50 @@ function totalsTable(order: EmailOrder): string {
 
   if (typeof order.subtotal === "number") rows.push(line("Subtotal", money(order.subtotal)));
   if (order.discount) rows.push(line("Discount", `− ${money(order.discount)}`));
+  if (order.tax) {
+    rows.push(line(`GST${order.tax_rate ? ` ${order.tax_rate}%` : ""}`, money(order.tax)));
+  }
   if (typeof order.shipping === "number") {
     rows.push(line("Delivery", order.shipping > 0 ? money(order.shipping) : "Free"));
   }
   rows.push(line("Total", money(order.total), true));
 
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;">${rows.join("")}</table>`;
+}
+
+/** Shown only when the payment settled online. Empty string otherwise. */
+function receiptBlock(order: EmailOrder): string {
+  if (!isPaidOnline(order)) return "";
+
+  const rows: Array<[string, string]> = [
+    ["Payment received", money(order.total)],
+    ["Method", "Razorpay (online)"],
+  ];
+  if (order.razorpay_payment_id) rows.push(["Reference", order.razorpay_payment_id]);
+
+  return `<div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border:1px solid ${LINE};border-radius:12px;">
+    <div style="font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:${ROSE};margin-bottom:6px;">Payment receipt</div>
+    ${rows
+      .map(
+        ([label, value]) =>
+          `<div style="display:flex;justify-content:space-between;font-size:13px;line-height:1.8;color:${INK};"><span style="color:${MUTED};">${escape(label)}</span><span>${escape(value)}</span></div>`,
+      )
+      .join("")}
+  </div>`;
+}
+
+/**
+ * What the customer still owes. Cash orders get this instead of a receipt, so
+ * the email can never imply the money has been collected.
+ */
+function paymentNote(order: EmailOrder): string {
+  if (isPaidOnline(order)) return "";
+  if (order.payment_method !== "cod") return "";
+
+  return `<p style="margin:16px 0 0;font-size:13px;line-height:1.7;color:${MUTED};">
+    Pay ${money(order.total)} to the delivery partner. This email is your bill, not proof of payment
+    — no receipt is issued for a cash on delivery order.
+  </p>`;
 }
 
 function addressBlock(order: EmailOrder): string {
@@ -220,9 +269,13 @@ export function toEmailOrder(order: Order): EmailOrder {
       : [],
     subtotal: order.subtotal,
     discount: order.discount,
+    tax: order.tax,
+    tax_rate: order.tax_rate,
     shipping: order.shipping,
     total: order.total,
     payment_method: order.payment_method,
+    payment_status: order.payment_status,
+    razorpay_payment_id: order.razorpay_payment_id,
     order_status: order.order_status,
     created_at: order.created_at,
   };
@@ -279,6 +332,8 @@ export function orderPlacedEmail(order: EmailOrder): MailContent {
     </div>
     ${order.items?.length ? itemsTable(order.items) : ""}
     ${totalsTable(order)}
+    ${receiptBlock(order)}
+    ${paymentNote(order)}
     ${addressBlock(order)}
     <p style="margin:20px 0 0;font-size:14px;line-height:1.7;color:${MUTED};">
       We dispatch in ${escape(storeConfig.dispatchDays)} and delivery usually takes ${escape(storeConfig.deliveryDays)}.

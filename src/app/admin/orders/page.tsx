@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
+import { BillDialog } from "@/components/order-bill";
+import { toBillOrder } from "@/lib/order-document";
 import { toast } from "sonner";
 import { formatPrice, subscribeOrders, updateOrderStatus } from "@/lib/firebase";
 import { ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, statusLabel } from "@/lib/orders";
@@ -17,6 +19,7 @@ export default function AdminOrdersPage() {
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [billOrder, setBillOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeOrders((list) => {
@@ -158,6 +161,9 @@ export default function AdminOrdersPage() {
                         <Check className="mr-1 h-3.5 w-3.5" /> Mark Paid
                       </Button>
                     )}
+                    <Button variant="outline" size="sm" onClick={() => setBillOrder(order)}>
+                      <FileText className="mr-1.5 h-3.5 w-3.5" /> Bill
+                    </Button>
                     <Select value={order.order_status} onValueChange={(value) => changeStatus(order, value as OrderStatus)}>
                       <SelectTrigger className="w-36 capitalize"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -208,6 +214,16 @@ export default function AdminOrdersPage() {
             <a href="/admin/orders">Refresh</a>
           </Button>
         </div>
+
+        {/* The bill is issued for every order; a receipt is added only when the
+            payment was made online and has settled. */}
+        <BillDialog
+          order={billOrder ? toBillOrder(billOrder) : null}
+          open={Boolean(billOrder)}
+          onOpenChange={(open) => {
+            if (!open) setBillOrder(null);
+          }}
+        />
       </main>
     </div>
   );

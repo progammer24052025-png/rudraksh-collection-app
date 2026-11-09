@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/admin-nav";
 import { toast } from "sonner";
 import {
+  effectivePrice,
   formatPrice,
   removeValue,
   subscribeCategories,
@@ -181,8 +182,8 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="p-3 text-muted-foreground">{product.brand_name || "—"}</td>
                     <td className="p-3 font-medium">
-                      {formatPrice(product.sale_price ?? product.price)}
-                      {product.sale_price ? (
+                      {formatPrice(effectivePrice(product))}
+                      {effectivePrice(product) < product.price ? (
                         <span className="ml-2 text-xs text-muted-foreground line-through">
                           {formatPrice(product.price)}
                         </span>

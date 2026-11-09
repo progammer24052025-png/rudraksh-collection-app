@@ -35,6 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/store-context";
 import {
+  effectivePrice,
   formatPrice,
   normalizeAddress,
   subscribeProducts,
@@ -615,7 +616,7 @@ function WishlistTab() {
               <div>
                 <p className="text-sm font-medium line-clamp-2">{product.name}</p>
                 <p className="mt-1 text-sm font-semibold">
-                  {formatPrice(product.sale_price ?? product.price)}
+                  {formatPrice(effectivePrice(product))}
                 </p>
               </div>
             </Link>

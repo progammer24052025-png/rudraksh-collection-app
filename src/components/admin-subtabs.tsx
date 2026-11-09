@@ -2,27 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
-import { isTabActive, tabsForPath } from "@/lib/admin-nav";
+import { ADMIN_GROUPS, groupForPath, isTabActive } from "@/lib/admin-nav";
 import { cn } from "@/lib/utils";
 
 /**
- * The sub-tabs of whichever group the current screen belongs to.
- * Rendered by AdminNav, so every admin page gets it without extra wiring.
+ * The second row of admin navigation: the screens inside the current group.
+ * Hidden for one-screen groups, where the top bar already links straight in.
  */
 export function AdminSubtabs() {
   const pathname = usePathname();
-  const current = tabsForPath(pathname);
+  const activeGroup = groupForPath(pathname) ?? ADMIN_GROUPS.find((group) => group.tabs.length > 1);
 
-  if (!current) return null;
+  if (!activeGroup || activeGroup.tabs.length < 2) return null;
 
   return (
-    <nav
-      aria-label={`${current.group.label} sections`}
-      className="border-t border-border bg-background/95 backdrop-blur"
-    >
-      <div className="mx-auto flex max-w-7xl items-center gap-1 overflow-x-auto px-4 py-2 sm:px-6">
-        {current.tabs.map((tab) => {
+    <div className="border-t border-border/60">
+      <nav
+        aria-label={`${activeGroup.label} screens`}
+        className="mx-auto flex max-w-7xl items-center gap-1 overflow-x-auto px-4 py-1.5 sm:px-6 hide-scrollbar"
+      >
+        {activeGroup.tabs.map((tab) => {
           const active = isTabActive(pathname, tab.href);
           return (
             <Link
@@ -30,22 +29,17 @@ export function AdminSubtabs() {
               href={tab.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
-                active ? "text-sage" : "text-muted-foreground hover:text-foreground",
+                "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition-colors",
+                active
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
               )}
             >
-              {active ? (
-                <motion.span
-                  layoutId={`admin-subtab-${current.group.key}`}
-                  className="absolute inset-0 rounded-full bg-sage/10"
-                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                />
-              ) : null}
-              <span className="relative">{tab.label}</span>
+              {tab.label}
             </Link>
           );
         })}
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 }

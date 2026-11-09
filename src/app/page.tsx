@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { ArrowRight, MapPin, Phone, Clock, Star, Sparkles, Heart, Truck, Shield, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -10,7 +11,7 @@ import { ProductCard } from "@/components/product-card";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 import { ScrollStory } from "@/components/scroll-story";
-import { fetchProducts, formatPrice, type Product } from "@/lib/store-data";
+import { effectivePrice, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
 import { ShopByCategory } from "@/components/shop-by-category";
 import { useStore } from "@/lib/store-context";
 import { OffersBanner } from "@/components/kit/offers-banner";
@@ -19,19 +20,20 @@ import { ClothingRailHero, type RailGarment } from "@/components/ui/product-rail
 import { subscribeBanners, isBannerLive } from "@/lib/firebase";
 import type { Banner } from "@/lib/types";
 
-function Hero3DLazy({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
-  const [Mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-  if (!Mounted) return null;
-  return (
-    <Suspense fallback={null}>
-      <Hero3DInner scrollProgress={scrollProgress} />
-    </Suspense>
-  );
-}
+/**
+ * three.js is ~600 kB before it draws anything. Loading it dynamically keeps
+ * it out of the route's initial bundle, so the hero copy and buttons paint
+ * first and the canvas arrives after the page is interactive.
+ */
+const Hero3D = dynamic(() => import("@/components/hero-3d").then((mod) => mod.Hero3D), {
+  ssr: false,
+  loading: () => null,
+});
 
-function Hero3DInner({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
-  const { Hero3D } = require("@/components/hero-3d");
+function Hero3DLazy({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
   return <Hero3D scrollProgress={scrollProgress} />;
 }
 
@@ -130,7 +132,7 @@ function BannerSection() {
           id: product.id,
           name: product.name,
           subtitle: product.brand_name,
-          price: product.sale_price ?? product.price,
+          price: effectivePrice(product),
           image: product.images[0] ?? "",
           href: `/products/${product.id}`,
         }))}
@@ -147,10 +149,10 @@ function NewOnTheRail({ products }: { products: Product[] }) {
     .map((product) => ({
       id: product.id,
       name: product.name,
-      description: product.brand_name ? `${product.brand_name} · ${formatPrice(product.sale_price ?? product.price)}` : formatPrice(product.sale_price ?? product.price),
+      description: product.brand_name ? `${product.brand_name} · ${formatPrice(effectivePrice(product))}` : formatPrice(effectivePrice(product)),
       image: product.images[0],
       cutout: product.image_cutout ?? undefined,
-      tag: formatPrice(product.sale_price ?? product.price),
+      tag: formatPrice(effectivePrice(product)),
       href: `/products/${product.id}`,
       details: [product.brand_name, product.category_name, product.fabric].filter((value): value is string => Boolean(value)),
     }));
