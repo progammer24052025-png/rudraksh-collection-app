@@ -6,7 +6,8 @@
  * `user_id` field in the request body, which is whatever the client typed.
  */
 
-const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "";
+// Same fallback order as next.config.ts: the clean name wins when it is set.
+const API_KEY = process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "";
 
 export type Caller = { uid: string; email: string | null; name: string | null };
 

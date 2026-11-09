@@ -74,8 +74,16 @@ export function isSameOrigin(request: Request): boolean {
     const originHost = new URL(origin).host;
     if (host && originHost === host) return true;
 
-    const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
-    if (configured && originHost === new URL(configured).host) return true;
+    // The configured site URL may hold several comma-separated hosts.
+    const configured = (process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+    for (const entry of configured.split(",").map((value) => value.trim())) {
+      if (!entry) continue;
+      try {
+        if (new URL(entry).host === originHost) return true;
+      } catch {
+        /* a malformed entry must not allow anything */
+      }
+    }
 
     // Vercel previews serve the same build from a generated host.
     const vercel = process.env.VERCEL_URL?.trim();
