@@ -161,7 +161,7 @@ export function ProductReviews({ productId }: { productId: string }) {
 
           <div className="mt-5 rounded-lg border border-border bg-card p-4">
             <p className="flex items-center gap-1.5 text-sm font-medium">
-              <BadgeCheck className="h-4 w-4 text-sage" /> Verified buyers only
+              <BadgeCheck className="h-4 w-4 text-sage-ink" /> Verified buyers only
             </p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               Only customers who received this item can review it, so what you read here comes from
@@ -207,7 +207,7 @@ export function ProductReviews({ productId }: { productId: string }) {
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <StarRating value={review.rating} />
                   <span className="text-sm font-medium">{review.name}</span>
-                  <span className="inline-flex items-center gap-1 text-xs text-sage">
+                  <span className="inline-flex items-center gap-1 text-xs text-sage-ink">
                     <BadgeCheck className="h-3.5 w-3.5" /> Verified buyer
                   </span>
                 </div>

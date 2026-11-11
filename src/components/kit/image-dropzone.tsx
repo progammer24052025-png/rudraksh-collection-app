@@ -149,9 +149,9 @@ export function ImageDropzone({
         )}
       >
         {busy ? (
-          <Loader2 className="h-7 w-7 animate-spin text-sage" aria-hidden />
+          <Loader2 className="h-7 w-7 animate-spin text-sage-ink" aria-hidden />
         ) : (
-          <UploadCloud className="h-7 w-7 text-sage" aria-hidden />
+          <UploadCloud className="h-7 w-7 text-sage-ink" aria-hidden />
         )}
         <p className="text-sm font-medium text-foreground">
           {busy ? "Preparing image…" : "Drop images here"}
@@ -232,7 +232,7 @@ export function ImageDropzone({
                   <a
                     href={ready.objectUrl}
                     download={ready.fileName}
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-sage hover:bg-sage/10"
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-sage-ink hover:bg-sage/10"
                   >
                     <Download className="h-3.5 w-3.5" aria-hidden />
                     Save file

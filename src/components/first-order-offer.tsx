@@ -105,7 +105,7 @@ export function FirstOrderOffer() {
       </button>
       <div className="flex items-start gap-3 pr-6">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
-          <Gift className="h-4 w-4 text-rose" />
+          <Gift className="h-4 w-4 text-rose-ink" />
         </span>
         <div>
           <p className="text-sm font-medium">

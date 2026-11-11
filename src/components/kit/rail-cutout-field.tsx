@@ -35,6 +35,7 @@ export function RailCutoutField({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [made, setMade] = useState<CutoutResult | null>(null);
+  const [savedMissing, setSavedMissing] = useState(false);
 
   const base = slugifyName(name) || "product";
   const cleanFolder = folder.replace(/^\/+|\/+$/g, "");
@@ -56,8 +57,9 @@ export function RailCutoutField({
         );
         return;
       }
+      // Preview only. The shop makes this same cut-out by itself, so nothing is saved unless
+      // the owner commits a hand-tuned file and chooses to use it below.
       setMade(result);
-      onChange(target);
     } finally {
       setBusy(false);
     }
@@ -67,8 +69,9 @@ export function RailCutoutField({
     <div className="space-y-2">
       <Label>Rail cut-out</Label>
       <p className="text-xs text-muted-foreground">
-        The hanging rail shows the piece itself rather than a framed photo. This separates the backdrop
-        in your browser and saves a transparent image; the photo above is left as it is.
+        The hanging rail shows the piece itself, not a framed photo. The shop cuts the first photo out
+        automatically (trying the next photos if needed), so there is nothing to save. Preview it here; a
+        plain, light background separates best.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -81,7 +84,7 @@ export function RailCutoutField({
           className="border-border bg-background"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Scissors className="h-4 w-4" aria-hidden />}
-          {busy ? "Separating…" : "Cut the piece out"}
+          {busy ? "Separating…" : "Preview the cut-out"}
         </Button>
         {value ? (
           <Button
@@ -112,21 +115,36 @@ export function RailCutoutField({
             <img src={made.url} alt="" className="h-full w-full object-contain" />
           </span>
           <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-xs text-foreground">Backdrop removed — this is what the rail hangs.</p>
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
-              /public{target}
+            <p className="text-xs text-foreground">
+              Backdrop removed. The shop makes this cut-out automatically; nothing needs saving.
             </p>
-            <a
-              href={made.url}
-              download={`${base}-cutout.webp`}
-              className="inline-flex items-center gap-1 text-xs text-sage hover:underline"
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden />
-              Save the file
-            </a>
-            <p className="text-[11px] text-muted-foreground">
-              Commit it to that path and the rail picks it up.
-            </p>
+            <details className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer">Use a hand-made file instead (advanced)</summary>
+              <p className="mt-1">
+                Save the file, commit it to <span className="font-mono">/public{target}</span>, deploy, then
+                choose &ldquo;Use committed file&rdquo;.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-3">
+                <a
+                  href={made.url}
+                  download={`${base}-cutout.webp`}
+                  className="inline-flex items-center gap-1 text-sage-ink hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden />
+                  Save the file
+                </a>
+                <button
+                  type="button"
+                  className="text-sage-ink hover:underline"
+                  onClick={() => {
+                    setSavedMissing(false);
+                    onChange(target);
+                  }}
+                >
+                  Use committed file
+                </button>
+              </div>
+            </details>
           </div>
         </div>
       ) : value ? (
@@ -136,19 +154,27 @@ export function RailCutoutField({
             style={{ background: RAIL_BACKDROP }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={value} alt="" className="h-full w-full object-contain" />
+            <img src={value} alt="" className="h-full w-full object-contain" onError={() => setSavedMissing(true)} />
           </span>
           <div className="min-w-0">
-            <p className="flex items-center gap-1 text-xs text-foreground">
-              <Check className="h-3.5 w-3.5 text-sage" aria-hidden />
-              The rail hangs this cut-out.
-            </p>
+            {savedMissing ? (
+              <p className="text-xs text-destructive">
+                This file is missing from the site, so the shop is using the automatic cut-out. Choose
+                Remove to clear it.
+              </p>
+            ) : (
+              <p className="flex items-center gap-1 text-xs text-foreground">
+                <Check className="h-3.5 w-3.5 text-sage-ink" aria-hidden />
+                The rail hangs this hand-made cut-out.
+              </p>
+            )}
             <p className="truncate font-mono text-[11px] text-muted-foreground">{value}</p>
           </div>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          No cut-out yet — the rail shows the photo hung from a hanger.
+          Automatic — the shop cuts the piece out of its photo. If no photo separates cleanly, the rail
+          shows the photo hung from a hanger instead.
         </p>
       )}
     </div>

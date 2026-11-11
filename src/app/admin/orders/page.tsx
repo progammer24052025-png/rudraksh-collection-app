@@ -10,7 +10,7 @@ import { BillDialog } from "@/components/order-bill";
 import { CancelOrderDialog } from "@/components/cancel-order-dialog";
 import { toBillOrder } from "@/lib/order-document";
 import { toast } from "sonner";
-import { formatPrice, subscribeOrders, updateOrderStatus, updateValue } from "@/lib/firebase";
+import { TrackingSyncError, formatPrice, subscribeOrders, updateOrderStatus, updateValue } from "@/lib/firebase";
 import { ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, statusLabel } from "@/lib/orders";
 import { nextOrderStep } from "@/lib/automation";
 import type { Order, OrderStatus, PaymentStatus } from "@/lib/types";
@@ -74,8 +74,12 @@ export default function AdminOrdersPage() {
           : `${order.order_number} → ${status}`,
       );
     } catch (error) {
+      if (error instanceof TrackingSyncError) {
+        toast.warning(`${order.order_number} → ${status}, but the customer tracking page did not update. Try again in a moment.`);
+        return;
+      }
       console.error(error);
-      toast.error("Could not update the order status");
+      toast.error(`Could not update the order status: ${error instanceof Error ? error.message : "unknown error"}`);
     } finally {
       setBusyId(null);
     }
@@ -127,12 +131,13 @@ export default function AdminOrdersPage() {
         await updateOrderStatus(order.id, bulkStep.status, extra);
         done += 1;
       } catch (error) {
+        if (error instanceof TrackingSyncError) done += 1;
         console.error(error);
       }
     }
     setBulkBusy(false);
     toast[done === filtered.length ? "success" : "error"](
-      `${done} of ${filtered.length} order(s) updated`,
+      `${done} of ${filtered.length} ${filtered.length === 1 ? "order" : "orders"} updated`,
     );
   };
 
@@ -142,6 +147,10 @@ export default function AdminOrdersPage() {
       await updateOrderStatus(order.id, order.order_status, { payment_status });
       toast.success(`Payment marked ${payment_status}`);
     } catch (error) {
+      if (error instanceof TrackingSyncError) {
+        toast.warning(`Payment marked ${payment_status}, but the customer tracking page did not update.`);
+        return;
+      }
       console.error(error);
       toast.error("Could not update the payment status");
     } finally {

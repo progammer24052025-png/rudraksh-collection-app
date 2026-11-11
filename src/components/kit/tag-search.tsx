@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ export function TagSearch({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
@@ -61,12 +62,12 @@ export function TagSearch({
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      <label htmlFor={inputId} className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {label}
-      </span>
+      </label>
 
       <div
-        className="relative rounded-lg border border-input bg-background p-2 transition-shadow focus-within:ring-2 focus-within:ring-sage/40"
+        className="relative rounded-lg border border-input bg-background p-2 transition-shadow focus-within:ring-2 focus-within:ring-sage-ink/50"
         onClick={() => inputRef.current?.focus()}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -83,7 +84,7 @@ export function TagSearch({
                   remove(tag);
                 }}
                 aria-label={`Remove ${tag}`}
-                className="rounded-full p-0.5 text-muted-foreground hover:bg-sage/25 hover:text-foreground"
+                className="rounded-full p-1.5 text-muted-foreground hover:bg-sage/25 hover:text-foreground"
               >
                 <X className="h-3 w-3" aria-hidden />
               </button>
@@ -94,6 +95,7 @@ export function TagSearch({
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <input
               ref={inputRef}
+              id={inputId}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -120,7 +122,7 @@ export function TagSearch({
                   className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-secondary"
                 >
                   {tag}
-                  <Plus className="h-3.5 w-3.5 text-sage" aria-hidden />
+                  <Plus className="h-3.5 w-3.5 text-sage-ink" aria-hidden />
                 </button>
               </li>
             ))}

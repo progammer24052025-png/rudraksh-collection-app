@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useCart } from "@/lib/cart-context";
 import { effectivePrice, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
 import { useStore } from "@/lib/store-context";
@@ -50,6 +51,20 @@ function CartContent() {
         .then((r) => {
           setProducts(r.products);
           setCatalogue(r.products);
+          // A saved bag can hold pieces that were since removed from the shop. They used to be
+          // hidden here while still counted in the header badge and "N items", so the count
+          // looked one too high. Take them out and say so. An empty catalogue means the fetch
+          // went wrong, not that everything sold out, so nothing is removed then.
+          if (r.products.length === 0) return;
+          const live = new Set(r.products.map((product) => product.id));
+          const gone = items.filter((item) => !live.has(item.productId));
+          if (gone.length === 0) return;
+          gone.forEach((item) => removeItem(item.productId, item.size, item.color));
+          toast.info(
+            gone.length === 1
+              ? "1 item in your bag is no longer available, so we removed it."
+              : `${gone.length} items in your bag are no longer available, so we removed them.`,
+          );
         })
         .catch(() => {});
     }
@@ -99,7 +114,7 @@ function CartContent() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="font-serif text-2xl font-medium sm:text-3xl">Shopping Cart</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{items.length} item(s)</p>
+      <p className="mt-1 text-sm text-muted-foreground">{items.length} {items.length === 1 ? "item" : "items"}</p>
 
       <FreeShippingBar
         className="mt-6"
@@ -141,7 +156,7 @@ function CartContent() {
                         </p>
                       )}
                       <Link href={`/products/${product.slug}`}>
-                        <h3 className="text-sm font-medium hover:text-primary">{product.name}</h3>
+                        <h2 className="text-sm font-medium hover:text-primary">{product.name}</h2>
                       </Link>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {item.size}{item.color && ` • ${item.color}`}
@@ -164,7 +179,7 @@ function CartContent() {
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+                        <span className="w-8 text-center text-sm font-medium" aria-live="polite" aria-label={`Quantity ${item.quantity}`}>{item.quantity}</span>
                         <Button
                           variant="outline" size="icon" className="h-8 w-8"
                           aria-label={`Increase quantity of ${product.name}`}
@@ -212,7 +227,7 @@ function CartContent() {
                 <span className="text-muted-foreground">Shipping</span>
                 <span className="font-medium">
                   {freeDelivery ? (
-                    <span className="text-sage">FREE</span>
+                    <span className="text-sage-ink">FREE</span>
                   ) : byDistance ? (
                     <span className="text-muted-foreground">At checkout</span>
                   ) : (
@@ -221,7 +236,7 @@ function CartContent() {
                 </span>
               </div>
               {discount > 0 && coupon && (
-                <div className="flex justify-between text-sage">
+                <div className="flex justify-between text-sage-ink">
                   <span>Coupon {coupon.code}</span>
                   <span className="font-medium">− {formatPrice(discount)}</span>
                 </div>
@@ -234,7 +249,7 @@ function CartContent() {
                   <span className="font-semibold">{formatPrice(grandTotal)}</span>
                 </div>
                 {listSavings + discount > 0 && (
-                  <p className="mt-1 text-right text-xs font-medium text-sage">
+                  <p className="mt-1 text-right text-xs font-medium text-sage-ink">
                     You save {formatPrice(listSavings + discount)} on this order
                   </p>
                 )}
@@ -290,7 +305,7 @@ export default function CartPage() {
     <>
       <div className="min-h-screen">
         <Header />
-        <main>
+        <main id="main">
           <CartContent />
         </main>
         <Footer />

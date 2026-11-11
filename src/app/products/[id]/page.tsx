@@ -59,6 +59,10 @@ function productJsonLd(product: Product, slug: string) {
     image: shareableImages(product),
     sku: product.sku || undefined,
     brand: product.brand_name ? { "@type": "Brand", name: product.brand_name } : undefined,
+    category: product.category_name || undefined,
+    material: product.fabric || undefined,
+    size: product.sizes?.length ? product.sizes : undefined,
+    color: product.colors?.length ? product.colors.map((c) => c.name).filter(Boolean) : undefined,
     offers: {
       "@type": "Offer",
       url: `${siteUrl}/products/${slug}`,
@@ -68,6 +72,15 @@ function productJsonLd(product: Product, slug: string) {
         product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       itemCondition: "https://schema.org/NewCondition",
       seller: { "@type": "Organization", name: storeConfig.name },
+      // Mirrors the published returns page (src/app/returns). Return fees are not stated
+      // there for non-exchange returns, so they are left out rather than guessed.
+      hasMerchantReturnPolicy: {
+        "@type": "MerchantReturnPolicy",
+        applicableCountry: "IN",
+        returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+        merchantReturnDays: storeConfig.returnWindowDays,
+        returnMethod: ["https://schema.org/ReturnByMail", "https://schema.org/ReturnInStore"],
+      },
     },
     // Only real, verified-buyer ratings are published; none means no rating markup.
     aggregateRating: reviewed
@@ -91,7 +104,7 @@ export default async function ProductPage({ params }: PageProps) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structured).replace(/</g, "\\u003c") }}
         />
       )}
-      <ProductDetailView slug={id} />
+      <ProductDetailView slug={id} initialProduct={structured ? product : null} />
     </>
   );
 }

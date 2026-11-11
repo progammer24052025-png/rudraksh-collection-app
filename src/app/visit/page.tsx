@@ -40,7 +40,7 @@ export default function VisitPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main">
         {/* Hero Section */}
         <section className="bg-cream/60 border-b border-border py-14 sm:py-18">
           <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">

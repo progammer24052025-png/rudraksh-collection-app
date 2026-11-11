@@ -31,7 +31,7 @@ export default function PrivacyPage() {
       <Header />
       <LegalNav />
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <main id="main" className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         {/* Hero Header */}
         <div className="text-center sm:text-left border-b border-border/80 pb-8">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">

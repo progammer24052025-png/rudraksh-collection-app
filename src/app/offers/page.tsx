@@ -61,11 +61,11 @@ export default function OffersPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main id="main" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <PageBreadcrumb items={[{ label: "Offers" }]} className="-mt-2" />
 
         <div className="mb-10 max-w-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage">Current offers</p>
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage-ink">Current offers</p>
           <h1 className="mt-2 font-serif text-3xl font-medium sm:text-4xl">Save on your next order</h1>
           <p className="mt-3 text-muted-foreground">
             One code per order, applied to the discounted price — sale items included. Codes are checked
@@ -91,7 +91,7 @@ export default function OffersPage() {
             {featured ? (
               <div className="mb-10 grid gap-6 rounded-2xl border border-border bg-card p-6 sm:p-8 lg:grid-cols-[1.1fr_1fr] lg:items-center">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage">Featured</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage-ink">Featured</p>
                   <h2 className="mt-2 font-serif text-2xl font-medium">{featured.title}</h2>
                   <p className="mt-2 text-sm text-muted-foreground">{describe(featured)}</p>
                   {featured.ends_at ? (

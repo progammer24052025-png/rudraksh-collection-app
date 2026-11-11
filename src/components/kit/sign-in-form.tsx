@@ -138,7 +138,7 @@ export function SignInForm({
               <span />
             )}
             {forgotHref ? (
-              <Link href={forgotHref} className="text-sm text-sage underline-offset-4 hover:underline">
+              <Link href={forgotHref} className="text-sm text-sage-ink underline-offset-4 hover:underline">
                 Forgot password?
               </Link>
             ) : null}
@@ -151,7 +151,7 @@ export function SignInForm({
           </p>
         ) : null}
         {notice ? (
-          <p className="rounded-lg bg-sage/10 px-3 py-2 text-sm text-sage">{notice}</p>
+          <p className="rounded-lg bg-sage/10 px-3 py-2 text-sm text-sage-ink">{notice}</p>
         ) : null}
 
         <Button

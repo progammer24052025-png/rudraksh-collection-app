@@ -64,7 +64,7 @@ export function CouponReveal({
         >
           {code}
           {copied ? (
-            <Check className="h-4 w-4 text-sage" aria-hidden />
+            <Check className="h-4 w-4 text-sage-ink" aria-hidden />
           ) : (
             <Copy className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
           )}
@@ -74,7 +74,7 @@ export function CouponReveal({
         <span
           aria-hidden
           className={cn(
-            "kit-peel-cover absolute inset-0 z-20 flex items-center justify-center gap-2 rounded-full bg-sage text-sm font-semibold text-white shadow-sm",
+            "kit-peel-cover absolute inset-0 z-20 flex items-center justify-center gap-2 rounded-full bg-sage-ink text-sm font-semibold text-white shadow-sm",
             revealed ? "-translate-x-[103%] -rotate-6 opacity-0" : "translate-x-0 rotate-0 opacity-100",
           )}
         >

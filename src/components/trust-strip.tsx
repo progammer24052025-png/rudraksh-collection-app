@@ -20,7 +20,7 @@ export function StoreTrust({ className }: { className?: string }) {
     <div className={cn("rounded-lg border border-border bg-card p-4", className)}>
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
-          <Store className="h-4 w-4 text-sage" />
+          <Store className="h-4 w-4 text-sage-ink" />
         </span>
         <div className="min-w-0 text-sm">
           <p className="font-medium">Sold by {store.storeName} — a real shop you can visit</p>

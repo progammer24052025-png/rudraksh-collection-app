@@ -63,7 +63,7 @@ export function OffersBanner({
       )}
     >
       <div className="flex flex-col justify-center gap-3 border-b border-border px-7 py-8 lg:border-b-0 lg:border-r">
-        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-sage/15 text-sage">
+        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-sage/15 text-sage-ink">
           <Gift className="h-5 w-5" aria-hidden />
         </span>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -132,7 +132,7 @@ export function OffersBanner({
                     className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                   />
                   {hasDiscount ? (
-                    <span className="absolute left-2 top-2 rounded-full bg-sage px-2 py-0.5 text-[11px] font-semibold text-white">
+                    <span className="absolute left-2 top-2 rounded-full bg-sage-ink px-2 py-0.5 text-[11px] font-semibold text-white">
                       {percent}% off
                     </span>
                   ) : null}

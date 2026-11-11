@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag, User, Search, Menu, X, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
 import { useStore } from "@/lib/store-context";
 import { Input } from "@/components/ui/input";
@@ -92,11 +92,12 @@ export function Header() {
         <div className="flex items-center gap-4 lg:hidden">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden">
+              <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-80 p-0">
+            <SheetContent side="left" className="w-80 p-0" aria-describedby={undefined}>
+              <SheetTitle className="sr-only">Menu</SheetTitle>
               <MobileNav />
             </SheetContent>
           </Sheet>
@@ -139,7 +140,7 @@ export function Header() {
               <User className="h-5 w-5" />
             </Link>
           </Button>
-          <Button variant="ghost" size="icon" asChild className="relative" aria-label="Cart">
+          <Button variant="ghost" size="icon" asChild className="relative" aria-label={cartCount > 0 ? `Cart, ${cartCount} ${cartCount === 1 ? "item" : "items"}` : "Cart"}>
             <Link href="/cart">
               <ShoppingBag className="h-5 w-5" />
               {cartCount > 0 && (

@@ -49,6 +49,11 @@
   --color-sage: var(--sage);
   --color-rose: var(--rose);
   --color-ink: var(--ink);
+  /* Darker text-safe shades of the accents (WCAG AA on cream/white). */
+  --color-sage-ink: var(--sage-ink);
+  --color-rose-ink: var(--rose-ink);
+  --color-saffron-ink: var(--saffron-ink);
+  --color-destructive-foreground: var(--destructive-foreground);
 }
 
 :root {
@@ -64,10 +69,11 @@
   --secondary: #F0EBE3;
   --secondary-foreground: #2D2A26;
   --muted: #F0EBE3;
-  --muted-foreground: #78716C;
+  --muted-foreground: #6B635D;
   --accent: #C28585;
   --accent-foreground: #FFFFFF;
-  --destructive: #DC3545;
+  --destructive: #C82333;
+  --destructive-foreground: #FFFFFF;
   --border: #E7E0D6;
   --input: #E7E0D6;
   --ring: #2D2A26;
@@ -90,9 +96,16 @@
   --sage: #8B9A7D;
   --rose: #C28585;
   --ink: #1C1917;
+  --sage-ink: #596650;
+  --rose-ink: #995C5C;
+  --saffron-ink: #7D6343;
 }
 
 .dark {
+  --sage-ink: #A9B89B;
+  --rose-ink: #D9A5A5;
+  --saffron-ink: #D4BC98;
+  --destructive-foreground: #1C1917;
   --background: #1C1917;
   --foreground: #FAF7F2;
   --card: #292524;
@@ -225,16 +238,38 @@
    avoids the reflow that `display: none` causes inside dialogs. */
 @media print {
   @page {
-    margin: 12mm;
+    size: A4;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
   }
 
   body * {
     visibility: hidden !important;
   }
 
+  /* On a page with a document, drop everything that is not the document or one of its
+     ancestors. Hidden content still takes up space, and that space printed as extra
+     blank (cream) pages after the bill or invoice. */
+  body:has(.print-area) *:not(.print-area):not(.print-area *):not(:has(.print-area)) {
+    display: none !important;
+  }
+
+  .print-area [data-print-hide] {
+    display: none !important;
+  }
+
   .print-area,
   .print-area * {
     visibility: visible !important;
+  }
+
+  .print-area {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .print-area {
@@ -249,4 +284,10 @@
   .print\:hidden {
     display: none !important;
   }
+}
+
+/* Visible keyboard focus for anything that does not draw its own ring. */
+:where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

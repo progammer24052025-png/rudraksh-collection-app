@@ -220,7 +220,7 @@ const AnimatedTicket = React.forwardRef<HTMLDivElement, TicketProps>(
 
           <div className="flex flex-col items-center p-8 text-center">
             <div className="animate-in zoom-in-50 rounded-full bg-sage/10 p-3 duration-500 delay-300">
-              {icon ?? <CheckCircleIcon className="h-10 w-10 animate-in zoom-in-75 text-sage duration-500 delay-500" />}
+              {icon ?? <CheckCircleIcon className="h-10 w-10 animate-in zoom-in-75 text-sage-ink duration-500 delay-500" />}
             </div>
             <h1 className="mt-4 font-serif text-2xl font-semibold">Thank you!</h1>
             <p className="mt-1 text-muted-foreground">Your order has been received</p>

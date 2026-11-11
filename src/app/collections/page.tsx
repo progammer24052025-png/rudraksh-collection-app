@@ -56,9 +56,9 @@ export default function CollectionsPage() {
     <>
       <div className="min-h-screen">
         <Header />
-        <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <main id="main" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="mb-10 max-w-2xl">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Categories</p>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Categories</p>
             <h1 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Shop by Category</h1>
             <p className="mt-4 text-muted-foreground leading-relaxed">
               Start with Men, Women or Kids, then narrow down to the collection that fits the
@@ -140,7 +140,7 @@ export default function CollectionsPage() {
                       No collections under {department.name} yet.{" "}
                       <Link
                         href={`/products?category=${department.slug}`}
-                        className="font-medium text-sage hover:underline"
+                        className="font-medium text-sage-ink hover:underline"
                       >
                         Browse everything in {department.name}
                       </Link>

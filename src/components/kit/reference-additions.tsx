@@ -21,7 +21,7 @@ function Block({ n, title, note, children }: { n: number; title: string; note?: 
   return (
     <section className="border-t border-border py-12 first:border-t-0">
       <div className="mb-6">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage">Reference {n}</p>
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage-ink">Reference {n}</p>
         <h2 className="mt-1 font-serif text-xl font-medium">{title}</h2>
         {note ? <p className="mt-1 text-sm text-muted-foreground">{note}</p> : null}
       </div>
@@ -34,7 +34,7 @@ export function ReferenceAdditions() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="mb-4">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage">Latest additions</p>
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-sage-ink">Latest additions</p>
         <h1 className="mt-2 font-serif text-3xl font-medium">Rail, peel button and order bill</h1>
         <p className="mt-2 text-muted-foreground">
           Integrated from the reference drop and re-skinned to the store palette. Everything below uses sample

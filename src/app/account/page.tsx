@@ -69,7 +69,7 @@ const statusClasses: Record<string, string> = {
   confirmed: "bg-amber-100 text-amber-700",
   packed: "bg-amber-100 text-amber-700",
   shipped: "bg-blue-100 text-blue-700",
-  delivered: "bg-sage/10 text-sage",
+  delivered: "bg-sage/10 text-sage-ink",
   cancelled: "bg-destructive/10 text-destructive",
 };
 
@@ -879,7 +879,7 @@ function AccountContent() {
         {!profile?.phoneVerified && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-saffron/30 bg-saffron/10 p-4">
             <div className="flex items-center gap-3">
-              <Shield className="h-5 w-5 text-saffron" />
+              <Shield className="h-5 w-5 text-saffron-ink" />
               <div>
                 <p className="font-medium">Verify your mobile number</p>
                 <p className="text-sm text-muted-foreground">Get delivery updates on SMS and WhatsApp</p>
@@ -1043,7 +1043,7 @@ export default function AccountPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main><AccountContent /></main>
+      <main id="main"><AccountContent /></main>
       <Footer />
     </div>
   );

@@ -79,7 +79,7 @@ const SECTIONS: Array<{ title: string; items: Array<{ q: string; a: string }> }>
       },
       {
         q: "What are the delivery charges?",
-        a: `Delivery is free on orders of ₹${storeConfig.freeShippingThreshold} or more. Below that a flat fee of ₹${storeConfig.shippingFee} applies.`,
+        a: `Delivery is free on orders of ₹${storeConfig.freeShippingThreshold} or more. Below that, the charge depends on how far your PIN code is from our Vadodara store. Enter your PIN code on any product page to see it; it is also shown at checkout before you pay.`,
       },
       {
         q: "Can I track my parcel?",
@@ -110,10 +110,10 @@ export default function FaqPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main>
+      <main id="main">
         <section className="bg-cream py-16">
           <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Help Centre</p>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Help Centre</p>
             <h1 className="mt-4 font-serif text-4xl font-medium sm:text-5xl">Frequently asked questions</h1>
             <p className="mt-4 text-lg text-muted-foreground">
               Everything about ordering, sizing, delivery and returns.

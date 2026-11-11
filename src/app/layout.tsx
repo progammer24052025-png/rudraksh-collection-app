@@ -28,7 +28,6 @@ export const metadata: Metadata = {
   ],
   applicationName: storeConfig.name,
   authors: [{ name: storeConfig.name }],
-  alternates: { canonical: "/" },
   openGraph: {
     title: "Rudraksh Collection — Premium Children's Wear",
     description:
@@ -75,6 +74,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className="antialiased">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-sm focus:font-medium focus:text-primary-foreground"
+        >
+          Skip to content
+        </a>
         <StoreSettingsProvider>
           <AuthProvider>
             <CartProvider>

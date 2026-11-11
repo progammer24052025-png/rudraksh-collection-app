@@ -44,7 +44,7 @@ export function ShopByCategory() {
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div data-reveal className="mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Categories</p>
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Categories</p>
           <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Shop by Category</h2>
           <p className="mt-3 max-w-xl text-muted-foreground">
             Start with who you are dressing, then narrow down to the occasion.

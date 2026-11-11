@@ -13,11 +13,11 @@ export default function StoryPage() {
     <>
       <div className="min-h-screen">
         <Header />
-        <main>
+        <main id="main">
           {/* Hero */}
           <section className="bg-cream py-20">
             <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-              <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Our Story</p>
+              <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Our Story</p>
               <h1 className="mt-4 font-serif text-4xl font-medium leading-tight sm:text-5xl">
                 Little Moments, Beautifully Dressed
               </h1>

@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { AdminSubtabs } from "@/components/admin-subtabs";
 import { useAdmin } from "@/lib/admin-context";
 import { ADMIN_GROUPS, groupForPath, isTabActive } from "@/lib/admin-nav";
@@ -33,7 +33,8 @@ export function AdminNav() {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-80 overflow-y-auto p-0">
+            <SheetContent side="left" className="w-80 overflow-y-auto p-0" aria-describedby={undefined}>
+              <SheetTitle className="sr-only">Admin menu</SheetTitle>
               <AdminDrawer pathname={pathname} />
             </SheetContent>
           </Sheet>
@@ -79,7 +80,7 @@ export function AdminNav() {
                           href={tab.href}
                           className={cn(
                             "cursor-pointer",
-                            isTabActive(pathname, tab.href) && "font-medium text-sage",
+                            isTabActive(pathname, tab.href) && "font-medium text-sage-ink",
                           )}
                         >
                           {tab.label}
