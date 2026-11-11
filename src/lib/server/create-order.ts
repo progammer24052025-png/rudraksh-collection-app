@@ -319,6 +319,16 @@ export async function recordOrder(input: RecordOrderInput): Promise<RecordOrderR
       if (left !== null) stockTaken = true;
     });
   }
+  // Real sales count behind the "Bestseller" badge.
+  for (const line of orderItems) {
+    if (!line.productId) continue;
+    await step(`sales count for ${line.productId}`, () =>
+      adminAdjustNumber(`products/${line.productId}/sold_count`, line.quantity, 3, {
+        createIfMissing: true,
+      }),
+    );
+  }
+
   if (stockTaken) {
     // Only orders that actually moved stock may put it back on cancellation.
     await step("stock flag", () => adminUpdate(`orders/${orderId}`, { stock_decremented: true }));

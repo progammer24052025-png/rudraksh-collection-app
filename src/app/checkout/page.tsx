@@ -29,6 +29,8 @@ import { Label } from "@/components/ui/label";
 import { useCart } from "@/lib/cart-context";
 import { formatPrice, createOrder, fetchProducts } from "@/lib/store-data";
 import { computeTotals, normalizePricing, validateCoupon } from "@/lib/pricing";
+import { readPendingCoupon, writePendingCoupon } from "@/lib/pending-coupon";
+import { BuyAssurance, StoreTrust } from "@/components/trust-strip";
 import {
   checkUserCouponUsed,
   createEmailAccount,
@@ -238,8 +240,8 @@ function CheckoutContent() {
   const shipping = totals.shipping;
   const grandTotal = totals.total;
 
-  async function applyCoupon() {
-    const code = couponInput.trim().toUpperCase();
+  async function applyCoupon(preset?: string) {
+    const code = (preset ?? couponInput).trim().toUpperCase();
     if (!code) return;
     if (!user) {
       setCouponMessage("Please sign in to apply coupon codes.");
@@ -272,6 +274,7 @@ function CheckoutContent() {
       }
 
       setCoupon(found);
+      writePendingCoupon(found.code);
       setCouponMessage(`${found.code} applied`);
       toast.success(`Coupon ${found.code} applied!`);
     } catch {
@@ -280,6 +283,19 @@ function CheckoutContent() {
       setCouponBusy(false);
     }
   }
+
+  // A coupon picked in the cart is applied here once, as soon as we know who
+  // is checking out (the one-use-per-customer check needs the account).
+  const cartCouponTried = useRef(false);
+  useEffect(() => {
+    if (cartCouponTried.current || !user || coupon || totals.subtotal <= 0) return;
+    cartCouponTried.current = true;
+    const pending = readPendingCoupon();
+    if (!pending) return;
+    setCouponInput(pending);
+    void applyCoupon(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per visit
+  }, [user, totals.subtotal]);
 
   // Prefill from the signed-in profile's default address.
   useEffect(() => {
@@ -458,6 +474,7 @@ function CheckoutContent() {
           href: `/track-order?order=${num}`,
         });
         clearCart();
+        writePendingCoupon(null);
         setStep("success");
         toast.success("Order placed successfully!");
       };
@@ -1155,6 +1172,8 @@ function CheckoutContent() {
                   <Shield className="h-4 w-4" />
                   <span>{paymentMethod === "razorpay" ? "Secure payment by Razorpay" : "Secure checkout"}</span>
                 </div>
+                <BuyAssurance className="mt-4" />
+                <StoreTrust className="mt-3" />
               </div>
             </motion.div>
           )}
@@ -1194,6 +1213,7 @@ function CheckoutContent() {
                     type="button"
                     onClick={() => {
                       setCoupon(null);
+                      writePendingCoupon(null);
                       setCouponInput("");
                       setCouponMessage(null);
                     }}

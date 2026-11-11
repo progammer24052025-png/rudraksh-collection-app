@@ -323,6 +323,49 @@ export function welcomeEmail(input: { name?: string | null; email: string }): Ma
   };
 }
 
+export function backInStockEmail(product: {
+  name: string;
+  slug?: string;
+  id: string;
+  price: number;
+  sale_price?: number | null;
+}): MailContent {
+  const price =
+    typeof product.sale_price === "number" && product.sale_price > 0 && product.sale_price < product.price
+      ? product.sale_price
+      : product.price;
+  const url = `${siteUrl}/products/${encodeURIComponent(product.slug || product.id)}`;
+
+  const blocks = `<div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:17px;color:${INK};">${escape(product.name)}</div>
+      <div style="margin-top:4px;font-size:14px;color:${MUTED};">${money(price)}</div>
+    </div>`;
+
+  return {
+    subject: `Back in stock: ${product.name}`,
+    html: layout({
+      preheader: `${product.name} is available again.`,
+      heading: "It is back in stock",
+      intro: "Hello, you asked us to tell you when this was available again. It is back on the shelf now:",
+      blocks,
+      cta: { label: "View the product", href: url },
+      closing: "Stock is limited, so it may sell out again. This is the only email you will get about this item.",
+    }),
+    text: [
+      "Hello,",
+      "",
+      "You asked us to tell you when this was available again. It is back in stock now:",
+      "",
+      `${product.name} - ${money(price)}`,
+      url,
+      "",
+      "This is the only email you will get about this item.",
+      "",
+      `${storeConfig.name} · ${storeConfig.location}`,
+    ].join("\n"),
+  };
+}
+
 export function orderPlacedEmail(order: EmailOrder): MailContent {
   const blocks = `
     <div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">

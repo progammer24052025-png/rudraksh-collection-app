@@ -5,6 +5,8 @@ import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
 import { StoreSettingsProvider } from "@/lib/store-context";
 import { storeConfig, siteUrl } from "@/lib/config";
+import { AccountSync } from "@/components/account-sync";
+import { FirstOrderOffer } from "@/components/first-order-offer";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -75,7 +77,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="antialiased">
         <StoreSettingsProvider>
           <AuthProvider>
-            <CartProvider>{children}</CartProvider>
+            <CartProvider>
+              <AccountSync />
+              {children}
+              <FirstOrderOffer />
+            </CartProvider>
           </AuthProvider>
         </StoreSettingsProvider>
         <script

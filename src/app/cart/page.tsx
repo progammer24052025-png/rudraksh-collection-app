@@ -8,23 +8,64 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
-import { effectivePrice, fetchProducts, formatPrice } from "@/lib/store-data";
+import { effectivePrice, fetchProducts, formatPrice, type Product } from "@/lib/store-data";
 import { useStore } from "@/lib/store-context";
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CartOffers } from "@/components/cart-offers";
+import { FreeShippingBar } from "@/components/free-shipping-bar";
+import { ProductCard } from "@/components/product-card";
+import { RecentlyViewed } from "@/components/recently-viewed";
+import { BuyAssurance } from "@/components/trust-strip";
+import { couponDiscount } from "@/lib/pricing";
+import { lowStockCount, maxQuantity, savingsPerUnit } from "@/lib/merch";
+import type { Coupon } from "@/lib/types";
 
 function CartContent() {
   const storeConfig = useStore();
   const { items, updateQuantity, removeItem, getCartTotal, getProduct, setProducts, isHydrated } = useCart();
   const cartTotal = getCartTotal();
   const shipping = cartTotal >= storeConfig.freeShippingThreshold ? 0 : storeConfig.shippingFee;
-  const grandTotal = cartTotal + shipping;
+  const [catalogue, setCatalogue] = useState<Product[]>([]);
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const handleCoupon = useCallback((next: Coupon | null) => setCoupon(next), []);
+
+  // An estimate: checkout re-prices everything and confirms the coupon.
+  const discount = coupon ? couponDiscount(coupon, cartTotal) : 0;
+  const grandTotal = Math.max(0, cartTotal - discount) + shipping;
+
+  // What the bag saves against list prices — real money, worth showing.
+  const listSavings = items.reduce((sum, item) => {
+    const product = getProduct(item.productId);
+    return product ? sum + savingsPerUnit(product) * item.quantity : sum;
+  }, 0);
 
   // Ensure products are loaded for cart display (Realtime Database).
   useEffect(() => {
     if (items.length > 0) {
-      fetchProducts().then(r => setProducts(r.products)).catch(() => {});
+      fetchProducts()
+        .then((r) => {
+          setProducts(r.products);
+          setCatalogue(r.products);
+        })
+        .catch(() => {});
     }
   }, [items.length, setProducts]);
+
+  // Pieces that would take the bag over the free-delivery line: the cheapest
+  // ones that close the gap first, so the suggestion is useful, not an upsell.
+  const inBag = useMemo(() => new Set(items.map((item) => item.productId)), [items]);
+  const gap = Math.max(0, storeConfig.freeShippingThreshold - cartTotal);
+  const suggestions = useMemo(() => {
+    if (gap <= 0) return [];
+    const candidates = catalogue.filter((product) => !inBag.has(product.id) && product.stock > 0);
+    const closing = candidates
+      .filter((product) => effectivePrice(product) >= gap)
+      .sort((a, b) => effectivePrice(a) - effectivePrice(b));
+    const rest = candidates
+      .filter((product) => effectivePrice(product) < gap)
+      .sort((a, b) => effectivePrice(b) - effectivePrice(a));
+    return [...closing, ...rest].slice(0, 4);
+  }, [catalogue, gap, inBag]);
 
   if (!isHydrated) {
     return (
@@ -56,13 +97,21 @@ function CartContent() {
       <h1 className="font-serif text-2xl font-medium sm:text-3xl">Shopping Cart</h1>
       <p className="mt-1 text-sm text-muted-foreground">{items.length} item(s)</p>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-3">
+      <FreeShippingBar
+        className="mt-6"
+        subtotal={cartTotal}
+        threshold={storeConfig.freeShippingThreshold}
+      />
+
+      <div className="mt-6 grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="space-y-4">
             {items.map((item, idx) => {
               const product = getProduct(item.productId);
               if (!product) return null;
               const price = effectivePrice(product);
+              const maxQty = maxQuantity(product);
+              const lowStock = lowStockCount(product);
 
               return (
                 <motion.div
@@ -93,20 +142,30 @@ function CartContent() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {item.size}{item.color && ` • ${item.color}`}
                       </p>
+                      {product.stock <= 0 ? (
+                        <p className="mt-1 text-xs font-medium text-destructive">
+                          Sold out — remove it to check out
+                        </p>
+                      ) : lowStock !== null ? (
+                        <p className="mt-1 text-xs font-medium text-destructive">Only {lowStock} left</p>
+                      ) : null}
                     </div>
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <Button
-                          variant="outline" size="icon" className="h-7 w-7"
+                          variant="outline" size="icon" className="h-8 w-8"
+                          aria-label={`Decrease quantity of ${product.name}`}
                           onClick={() => updateQuantity(item.productId, item.size, item.color, item.quantity - 1)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
                         <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
                         <Button
-                          variant="outline" size="icon" className="h-7 w-7"
-                          onClick={() => updateQuantity(item.productId, item.size, item.color, item.quantity + 1)}
+                          variant="outline" size="icon" className="h-8 w-8"
+                          aria-label={`Increase quantity of ${product.name}`}
+                          disabled={item.quantity >= maxQty}
+                          onClick={() => updateQuantity(item.productId, item.size, item.color, Math.min(maxQty, item.quantity + 1))}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -115,7 +174,8 @@ function CartContent() {
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-semibold">{formatPrice(price * item.quantity)}</span>
                         <Button
-                          variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${product.name} from cart`}
                           onClick={() => removeItem(item.productId, item.size, item.color)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -150,17 +210,32 @@ function CartContent() {
                   {shipping === 0 ? <span className="text-sage">FREE</span> : formatPrice(shipping)}
                 </span>
               </div>
-              {cartTotal < storeConfig.freeShippingThreshold && (
-                <p className="text-xs text-muted-foreground">
-                  Add {formatPrice(storeConfig.freeShippingThreshold - cartTotal)} more for free shipping
-                </p>
+              {discount > 0 && coupon && (
+                <div className="flex justify-between text-sage">
+                  <span>Coupon {coupon.code}</span>
+                  <span className="font-medium">− {formatPrice(discount)}</span>
+                </div>
               )}
               <div className="border-t border-border pt-3">
                 <div className="flex justify-between text-base">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">{discount > 0 ? "Estimated total" : "Total"}</span>
                   <span className="font-semibold">{formatPrice(grandTotal)}</span>
                 </div>
+                {listSavings + discount > 0 && (
+                  <p className="mt-1 text-right text-xs font-medium text-sage">
+                    You save {formatPrice(listSavings + discount)} on this order
+                  </p>
+                )}
+                {discount > 0 && (
+                  <p className="mt-1 text-right text-xs text-muted-foreground">
+                    Coupon is confirmed at checkout
+                  </p>
+                )}
               </div>
+            </div>
+
+            <div className="mt-5 border-t border-border pt-4">
+              <CartOffers subtotal={cartTotal} onChange={handleCoupon} />
             </div>
 
             <Button asChild size="lg" className="mt-6 w-full gap-2">
@@ -169,12 +244,28 @@ function CartContent() {
               </Link>
             </Button>
 
-            <div className="mt-4 rounded-md bg-muted/50 p-3 text-center text-xs text-muted-foreground">
-              <p>COD & online payment available</p>
-            </div>
+            <BuyAssurance className="mt-4 sm:grid-cols-1" />
           </div>
         </div>
       </div>
+
+      {suggestions.length > 0 && (
+        <section className="mt-16">
+          <h2 className="font-serif text-2xl font-medium">
+            Add {formatPrice(gap)} more for free delivery
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Delivery is {formatPrice(storeConfig.shippingFee)} below {formatPrice(storeConfig.freeShippingThreshold)}. These would cover it.
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
+            {suggestions.map((product, index) => (
+              <ProductCard key={product.id} product={product} index={index} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <RecentlyViewed excludeIds={items.map((item) => item.productId)} />
     </div>
   );
 }

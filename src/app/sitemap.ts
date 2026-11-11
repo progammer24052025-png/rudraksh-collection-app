@@ -1,8 +1,10 @@
 import type { MetadataRoute } from "next";
 import { brands, collections, siteUrl } from "@/lib/config";
+import { getActiveProducts } from "@/lib/server/catalog";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  const products = await getActiveProducts();
 
   const staticPaths: Array<[string, number]> = [
     ["", 1],
@@ -26,6 +28,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: (path === "" ? "daily" : "weekly") as "daily" | "weekly",
       priority,
+    })),
+    ...products.map((product) => ({
+      url: `${siteUrl}/products/${encodeURIComponent(product.slug)}`,
+      lastModified: product.updated_at ? new Date(product.updated_at) : now,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
     })),
     ...brands.map((brand) => ({
       url: `${siteUrl}/brands/${brand.slug}`,

@@ -36,6 +36,9 @@ const checks = [
   ["payments", "deny", "server only"],
   ["pendingPayments", "deny", "server only — holds delivery addresses"],
   ["rateLimits", "deny", "server only"],
+  ["reviews", "allow", "product pages show verified-buyer reviews"],
+  ["stockAlerts", "deny", "holds customer email addresses"],
+  ["userState", "deny", "per-account saved bag and wishlist"],
 ];
 
 if (keyArg) {

@@ -10,6 +10,8 @@ type CartContextType = {
   removeItem: (productId: string, size: string, color: string) => void;
   updateQuantity: (productId: string, size: string, color: string, quantity: number) => void;
   clearCart: () => void;
+  /** Swaps the whole bag — used when merging with the bag saved on the account. */
+  replaceItems: (items: CartItem[]) => void;
   getCartTotal: () => number;
   getCartCount: () => number;
   getProduct: (productId: string) => Product | undefined;
@@ -81,6 +83,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [removeItem]);
 
   const clearCart = useCallback(() => setItems([]), []);
+  const replaceItems = useCallback((next: CartItem[]) => setItems(next), []);
 
   const getCartTotal = useCallback(() => {
     return items.reduce((total, item) => {
@@ -108,6 +111,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         removeItem,
         updateQuantity,
         clearCart,
+        replaceItems,
         getCartTotal,
         getCartCount,
         getProduct,

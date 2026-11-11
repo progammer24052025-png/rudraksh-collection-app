@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getFirebaseAuth, logActivity } from "@/lib/firebase";
 
-const STORAGE_KEY = "rudraksh-wishlist";
-const SYNC_EVENT = "rudraksh-wishlist-change";
+export const WISHLIST_STORAGE_KEY = "rudraksh-wishlist";
+export const WISHLIST_SYNC_EVENT = "rudraksh-wishlist-change";
+const STORAGE_KEY = WISHLIST_STORAGE_KEY;
+const SYNC_EVENT = WISHLIST_SYNC_EVENT;
 
 function readWishlist(): string[] {
   if (typeof window === "undefined") return [];
@@ -18,7 +20,10 @@ function readWishlist(): string[] {
   }
 }
 
-/** Wishlist lives in localStorage so guests can use it without an account. */
+/**
+ * Wishlist lives in localStorage so guests can use it without an account.
+ * For signed-in customers `AccountSync` mirrors it to their account.
+ */
 export function useWishlist() {
   const [ids, setIds] = useState<string[]>([]);
 

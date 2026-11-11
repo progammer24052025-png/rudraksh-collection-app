@@ -14,6 +14,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { ImageDropzone } from "@/components/kit/image-dropzone";
 import { RailCutoutField } from "@/components/kit/rail-cutout-field";
 import {
+  getFirebaseAuth,
   readValue,
   subscribeBrands,
   subscribeCategories,
@@ -166,14 +167,21 @@ export default function AdminProductEditPage() {
       status: (form.status as Product["status"]) ?? "active",
       is_featured: form.is_featured,
       is_new: form.is_new,
+      // Written by the server (reviews and orders); a save from this form must
+      // carry them over or every edit would wipe a product's rating and sales.
+      ...(typeof existing?.rating === "number" ? { rating: existing.rating } : {}),
+      ...(typeof existing?.rating_count === "number" ? { rating_count: existing.rating_count } : {}),
+      ...(typeof existing?.sold_count === "number" ? { sold_count: existing.sold_count } : {}),
       created_at: existing?.created_at ?? now,
       updated_at: now,
     };
+    const restocked = !isNew && (existing?.stock ?? 0) <= 0 && payload.stock > 0 && payload.status === "active";
 
     setSaving(true);
     try {
       await writeValue(["products", productId], payload);
       toast.success(isNew ? "Product created" : "Product updated");
+      if (restocked) void notifyRestock(productId);
       router.push("/admin/products");
     } catch (error) {
       console.error(error);
@@ -182,6 +190,25 @@ export default function AdminProductEditPage() {
       setSaving(false);
     }
   };
+
+  /** Emails customers who asked to hear when this product is back. */
+  async function notifyRestock(id: string) {
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      if (!token) return;
+      const response = await fetch("/api/stock-alerts", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ productId: id }),
+      });
+      const data = (await response.json()) as { ok?: boolean; sent?: number };
+      if (data.ok && data.sent) {
+        toast.success(`Back-in-stock email sent to ${data.sent} waiting customer${data.sent === 1 ? "" : "s"}`);
+      }
+    } catch (error) {
+      console.warn("Back-in-stock alert failed:", error);
+    }
+  }
 
   if (loading) {
     return (

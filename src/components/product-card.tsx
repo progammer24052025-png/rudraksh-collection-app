@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import Image from "@/components/store-image";
-import { Heart } from "lucide-react";
+import { Heart, ShoppingBag } from "lucide-react";
 import { motion } from "framer-motion";
 import { type Product, effectivePrice, formatPrice } from "@/lib/store-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StarRating } from "@/components/star-rating";
 import { useCart } from "@/lib/cart-context";
 import { useWishlist } from "@/lib/use-wishlist";
+import { discountPercent, hasRating, isBestseller, isNewArrival, lowStockCount } from "@/lib/merch";
 import { toast } from "sonner";
 
 type ProductCardProps = {
@@ -21,7 +23,12 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { toggle, has } = useWishlist();
   const saved = has(product.id);
   const displayPrice = effectivePrice(product);
-  const hasDiscount = displayPrice < product.price;
+  const percentOff = discountPercent(product);
+  const lowStock = lowStockCount(product);
+  const inStock = product.stock > 0;
+  // With several sizes a one-tap add would have to guess — and a guessed size is
+  // a return. Those cards send the shopper to the product page to choose.
+  const needsChoice = product.sizes.length > 1 || product.colors.length > 1;
 
   const handleWishlist = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -30,16 +37,22 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     toast.success(saved ? "Removed from wishlist" : "Saved to wishlist");
   };
 
-  const handleQuickAdd = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!product.sizes.length) {
-      addItem(product.id, "Free Size", product.colors[0]?.name || "", 1);
-    } else {
-      addItem(product.id, product.sizes[0], product.colors[0]?.name || "", 1);
-    }
+  const handleQuickAdd = (event: React.MouseEvent) => {
+    if (needsChoice) return; // follow the link to the product page
+    event.preventDefault();
+    event.stopPropagation();
+    addItem(product.id, product.sizes[0] || "Free Size", product.colors[0]?.name || "", 1);
     toast.success("Added to cart");
   };
+
+  // One status badge at most, so the photo stays the hero.
+  const badge = percentOff > 0
+    ? { label: `${percentOff}% off`, className: "bg-destructive text-destructive-foreground" }
+    : isBestseller(product)
+      ? { label: "Bestseller", className: "bg-amber-500 text-white" }
+      : isNewArrival(product)
+        ? { label: "New", className: "bg-sage text-white" }
+        : null;
 
   return (
     <motion.div
@@ -57,7 +70,9 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               alt={product.name}
               fill
               className="object-cover transition-transform duration-700 group-hover:scale-105"
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              // Some grids show one card per row on phones, so ask for a full-width
+              // image there; a 50vw request came out visibly soft.
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 33vw, 25vw"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground">No image</div>
@@ -65,18 +80,16 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
 
           <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-          {hasDiscount && (
-            <Badge className="absolute left-2 top-2 bg-destructive text-destructive-foreground">
-              Sale
-            </Badge>
+          {badge && (
+            <Badge className={`absolute left-2 top-2 ${badge.className}`}>{badge.label}</Badge>
           )}
 
-
+          {/* Always visible on touch screens, where there is no hover. */}
           <Button
             variant="ghost"
             size="icon"
-            className={`absolute right-2 top-2 h-8 w-8 rounded-full bg-white/85 backdrop-blur transition-opacity hover:bg-white ${
-              saved ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            className={`absolute right-2 top-2 h-9 w-9 rounded-full bg-white/85 backdrop-blur transition-opacity hover:bg-white ${
+              saved ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
             }`}
             onClick={handleWishlist}
             aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
@@ -85,20 +98,32 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             <Heart className={`h-4 w-4 ${saved ? "fill-rose text-rose" : ""}`} />
           </Button>
 
-          {product.stock === 0 && (
+          {!inStock && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <span className="rounded bg-white/90 px-3 py-1 text-sm font-medium">Out of Stock</span>
             </div>
           )}
 
-          {product.stock > 0 && (
-            <Button
-              size="sm"
-              className="absolute bottom-3 left-3 right-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-              onClick={handleQuickAdd}
-            >
-              Quick Add
-            </Button>
+          {inStock && (
+            <>
+              {/* Desktop: full-width button on hover. */}
+              <Button
+                size="sm"
+                className="absolute bottom-3 left-3 right-3 hidden opacity-0 transition-opacity duration-300 group-hover:opacity-100 focus-visible:opacity-100 md:inline-flex"
+                onClick={handleQuickAdd}
+              >
+                {needsChoice ? "Choose options" : "Quick Add"}
+              </Button>
+              {/* Touch: a round button that is always there. */}
+              <Button
+                size="icon"
+                className="absolute bottom-2 right-2 h-10 w-10 rounded-full shadow-md md:hidden"
+                onClick={handleQuickAdd}
+                aria-label={needsChoice ? `Choose options for ${product.name}` : `Add ${product.name} to cart`}
+              >
+                <ShoppingBag className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
 
@@ -109,14 +134,23 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             </p>
           )}
           <h3 className="line-clamp-2 text-sm font-medium leading-snug">{product.name}</h3>
-          <div className="flex items-baseline gap-2">
+          {hasRating(product) && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <StarRating value={product.rating ?? 0} size={12} />
+              <span>({product.rating_count})</span>
+            </p>
+          )}
+          <div className="flex flex-wrap items-baseline gap-x-2">
             <span className="font-semibold">{formatPrice(displayPrice)}</span>
-            {hasDiscount && (
+            {percentOff > 0 && (
               <span className="text-sm text-muted-foreground line-through">
                 {formatPrice(product.price)}
               </span>
             )}
           </div>
+          {lowStock !== null && (
+            <p className="text-xs font-medium text-destructive">Only {lowStock} left</p>
+          )}
         </div>
       </Link>
     </motion.div>

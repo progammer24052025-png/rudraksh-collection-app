@@ -17,7 +17,17 @@ export type ResolvedStore = typeof storeConfig & {
   mapsLink: string | null;
   instagramLink: string | null;
   hasContact: boolean;
+  /**
+   * The static config ships with placeholder contact and tax details. These are
+   * true only when the store has saved its own value in Admin → Settings, so a
+   * placeholder GSTIN or phone number is never presented to shoppers as real.
+   */
+  confirmed: { gstin: boolean; whatsapp: boolean; phone: boolean; address: boolean };
 };
+
+/** Saved by the store itself, and not just the shipped placeholder. */
+const isOwnValue = (saved: string | undefined, placeholder: string) =>
+  Boolean(saved && saved.trim() && saved.trim() !== placeholder.trim());
 
 const buildResolved = (settings: StoreSettings | null): ResolvedStore => {
   const merged = {
@@ -39,6 +49,12 @@ const buildResolved = (settings: StoreSettings | null): ResolvedStore => {
     mapsLink: merged.googleMapsUrl || null,
     instagramLink: merged.instagram || null,
     hasContact: Boolean(merged.address || merged.phone || merged.whatsapp || merged.email),
+    confirmed: {
+      gstin: isOwnValue(settings?.gstin, storeConfig.gstin),
+      whatsapp: isOwnValue(settings?.whatsapp, storeConfig.whatsapp),
+      phone: isOwnValue(settings?.phone, storeConfig.phone),
+      address: isOwnValue(settings?.address, storeConfig.address),
+    },
   };
 };
 

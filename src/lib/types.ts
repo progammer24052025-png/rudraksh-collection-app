@@ -82,7 +82,12 @@ export interface Product {
   is_new: boolean;
   /** Legacy flag kept for older records. */
   is_sample?: boolean;
+  /** Average of verified-buyer reviews, written by the server. */
   rating?: number;
+  /** How many verified-buyer reviews the average is based on. */
+  rating_count?: number;
+  /** Units sold through server-written orders. */
+  sold_count?: number;
   tags?: string[];
   created_at: string;
   updated_at: string;
@@ -286,4 +291,16 @@ export interface CartItem {
   quantity: number;
   size: string;
   color: string;
+}
+
+/** A review from a customer whose order of this product was delivered. */
+export interface Review {
+  uid: string;
+  name: string;
+  rating: number;
+  text: string;
+  size?: string | null;
+  order_number?: string | null;
+  created_at: string;
+  updated_at?: string;
 }

@@ -30,10 +30,31 @@ const Hero3D = dynamic(() => import("@/components/hero-3d").then((mod) => mod.He
   loading: () => null,
 });
 
+/**
+ * Whether this device should get the 3D hero at all. Phones, data-saver mode,
+ * reduced-motion preferences and low-power hardware get the plain hero: the
+ * headline and buttons are what sell, and ~600 kB of WebGL on a budget phone
+ * only delays them.
+ */
+function canRender3D(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.innerWidth < 1024) return false;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  const nav = navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+    deviceMemory?: number;
+  };
+  if (nav.connection?.saveData) return false;
+  if (nav.connection?.effectiveType && /(^|-)2g$|^3g$/.test(nav.connection.effectiveType)) return false;
+  if (typeof nav.deviceMemory === "number" && nav.deviceMemory < 4) return false;
+  if (typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency < 4) return false;
+  return true;
+}
+
 function Hero3DLazy({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return null;
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => { setEnabled(canRender3D()); }, []);
+  if (!enabled) return null;
   return <Hero3D scrollProgress={scrollProgress} />;
 }
 
