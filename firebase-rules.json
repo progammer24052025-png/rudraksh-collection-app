@@ -1,0 +1,153 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rudraksh": {
+      ".read": false,
+      ".write": false,
+      "products": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "slug",
+          "category_slug",
+          "brand_slug",
+          "is_featured"
+        ]
+      },
+      "brands": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()"
+      },
+      "categories": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()"
+      },
+      "settings": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()"
+      },
+      "banners": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()"
+      },
+      "coupons": {
+        ".read": true,
+        ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "code"
+        ]
+      },
+      "couponRedemptions": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        "$code": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && $uid === auth.uid && !data.exists() && newData.child('user_id').val() === auth.uid"
+          }
+        }
+      },
+      "couponRedemptionsByPhone": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        "$code": {
+          "$phone": {
+            ".read": "auth != null && (!data.exists() || data.child('user_id').val() === auth.uid)",
+            ".write": "auth != null && !data.exists() && newData.child('user_id').val() === auth.uid"
+          }
+        }
+      },
+      "userCoupons": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "admins": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && ((auth.uid === $uid && !root.child('rudraksh/admins').exists() && auth.token.email_verified === true && newData.child('email').val() === auth.token.email && (auth.token.email === 'admin@rudrakshcollection.in' || auth.token.email === 'progammer.24052025@gmail.com' || auth.token.email === 'rudrakshcollection22309@gmail.com')) || root.child('rudraksh/admins').child(auth.uid).exists())"
+        }
+      },
+      "adminRequests": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "requested_at"
+        ],
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && ((auth.uid === $uid && !data.exists()) || root.child('rudraksh/admins').child(auth.uid).exists())",
+          ".validate": "newData.hasChildren(['uid', 'requested_at']) || !newData.exists()"
+        }
+      },
+      "users": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "orders": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "order_number",
+          "user_id",
+          "order_status"
+        ],
+        "$orderId": {
+          ".read": "auth != null && (data.child('user_id').val() === auth.uid || root.child('rudraksh/admins').child(auth.uid).exists())",
+          ".write": "(auth != null && root.child('rudraksh/admins').child(auth.uid).exists()) || (auth != null && !data.exists() && newData.child('user_id').val() === auth.uid && newData.child('client_written').val() === true && !newData.child('stock_decremented').exists() && newData.hasChildren(['order_number', 'customer_name', 'phone', 'address', 'city', 'state', 'pincode', 'items', 'total', 'order_status']) && newData.child('payment_status').val() === 'pending' && newData.child('order_status').val() === 'placed' && newData.child('total').isNumber() && newData.child('total').val() >= 0)",
+          ".validate": "newData.hasChildren(['order_number', 'customer_name', 'phone', 'items', 'total']) || !newData.exists()"
+        }
+      },
+      "ordersByUser": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$orderId": {
+            ".write": "!data.exists() && auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChild('order_number')"
+          }
+        }
+      },
+      "activity": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "payments": {
+        ".read": false,
+        ".write": false
+      },
+      "tracking": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "order_number"
+        ],
+        "$orderNumber": {
+          ".read": true,
+          ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists() || (auth != null && !data.exists() && newData.hasChildren(['order_number', 'order_status', 'phone_last4']))",
+          ".validate": "newData.hasChildren(['order_number', 'order_status', 'phone_last4']) && newData.child('order_number').val() === $orderNumber && newData.child('phone_last4').val().length === 4 || !newData.exists()"
+        }
+      },
+      "messages": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".indexOn": [
+          "status",
+          "created_at"
+        ],
+        "$messageId": {
+          ".write": "!data.exists() && newData.hasChildren(['name', 'email', 'message', 'status', 'created_at'])",
+          ".validate": "newData.child('email').val().contains('@') && newData.child('name').val().length <= 120 && newData.child('message').val().length <= 4000 && newData.child('status').val() === 'new' || !newData.exists()"
+        }
+      },
+      "pendingPayments": {
+        ".read": false,
+        ".write": false
+      },
+      "rateLimits": {
+        ".read": false,
+        ".write": false
+      }
+    }
+  }
+}
