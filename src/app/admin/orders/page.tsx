@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, RefreshCw, Check, FileText } from "lucide-react";
+import { Search, Loader2, RefreshCw, Check, FileText, ChevronsRight } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { toBillOrder } from "@/lib/order-document";
 import { toast } from "sonner";
 import { formatPrice, subscribeOrders, updateOrderStatus } from "@/lib/firebase";
 import { ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, statusLabel } from "@/lib/orders";
+import { nextOrderStep } from "@/lib/automation";
 import type { Order, OrderStatus, PaymentStatus } from "@/lib/types";
 
 export default function AdminOrdersPage() {
@@ -20,6 +21,13 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [billOrder, setBillOrder] = useState<Order | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // The dashboard links here with ?status=… so a task opens already filtered.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("status");
+    if (wanted && (ORDER_STATUSES as string[]).includes(wanted)) setFilter(wanted);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeOrders((list) => {
@@ -63,6 +71,36 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // With one status on screen, every order shown has the same next step, so the
+  // whole batch can be moved along together — e.g. after a packing session.
+  const bulkStep = filter !== "all" ? nextOrderStep(filter as OrderStatus) : null;
+
+  const advanceAll = async () => {
+    if (!bulkStep || !filtered.length) return;
+    const ok = window.confirm(
+      `${bulkStep.label} for all ${filtered.length} order(s) shown? Each customer gets the usual email.`,
+    );
+    if (!ok) return;
+    setBulkBusy(true);
+    let done = 0;
+    for (const order of filtered) {
+      try {
+        const extra: { payment_status?: PaymentStatus } = {};
+        if (bulkStep.status === "delivered" && order.payment_method === "cod" && order.payment_status === "pending") {
+          extra.payment_status = "paid";
+        }
+        await updateOrderStatus(order.id, bulkStep.status, extra);
+        done += 1;
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    setBulkBusy(false);
+    toast[done === filtered.length ? "success" : "error"](
+      `${done} of ${filtered.length} order(s) updated`,
+    );
+  };
+
   const changePayment = async (order: Order, payment_status: PaymentStatus) => {
     setBusyId(order.id);
     try {
@@ -98,6 +136,16 @@ export default function AdminOrdersPage() {
                 className="w-56 pl-9"
               />
             </div>
+            {bulkStep && filtered.length > 1 && (
+              <Button variant="outline" onClick={advanceAll} disabled={bulkBusy}>
+                {bulkBusy ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <ChevronsRight className="mr-1.5 h-4 w-4" />
+                )}
+                {bulkStep.label} — all {filtered.length}
+              </Button>
+            )}
             <Select value={filter} onValueChange={setFilter}>
               <SelectTrigger className="w-40"><SelectValue placeholder="Filter" /></SelectTrigger>
               <SelectContent>
@@ -158,6 +206,19 @@ export default function AdminOrdersPage() {
                         Total not verified — check prices
                       </span>
                     )}
+                    {(() => {
+                      const step = nextOrderStep(order.order_status);
+                      return step ? (
+                        <Button
+                          size="sm"
+                          className="h-9 text-xs"
+                          onClick={() => changeStatus(order, step.status)}
+                          disabled={busyId === order.id || bulkBusy}
+                        >
+                          <ChevronsRight className="mr-1 h-3.5 w-3.5" /> {step.label}
+                        </Button>
+                      ) : null;
+                    })()}
                     {order.payment_status === "pending" && (
                       <Button
                         size="sm"

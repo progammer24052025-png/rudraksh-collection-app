@@ -172,6 +172,7 @@ export default function AdminProductEditPage() {
       ...(typeof existing?.rating === "number" ? { rating: existing.rating } : {}),
       ...(typeof existing?.rating_count === "number" ? { rating_count: existing.rating_count } : {}),
       ...(typeof existing?.sold_count === "number" ? { sold_count: existing.sold_count } : {}),
+      ...(existing?.announced_at ? { announced_at: existing.announced_at } : {}),
       created_at: existing?.created_at ?? now,
       updated_at: now,
     };

@@ -19,11 +19,12 @@ import {
   adminSet,
   adminUpdate,
 } from "@/lib/server/rtdb-admin";
-import { orderPlacedEmail, toEmailOrder } from "@/lib/server/email-templates";
-import { orderNumber } from "@/lib/server/price-cart";
-import { isMailConfigured, sendMail } from "@/lib/server/smtp";
+import { orderPlacedEmail, ownerNewOrderEmail, toEmailOrder } from "@/lib/server/email-templates";
+import { orderNumber, publicGet } from "@/lib/server/price-cart";
+import { isMailConfigured, mailSender, sendMail } from "@/lib/server/smtp";
+import { resolveAutomation } from "@/lib/automation";
 import type { Totals } from "@/lib/pricing";
-import type { Order } from "@/lib/types";
+import type { Order, StoreSettings } from "@/lib/types";
 
 export type OrderCustomer = {
   name: string;
@@ -191,11 +192,22 @@ export async function recordOrder(input: RecordOrderInput): Promise<RecordOrderR
     }
   }
 
+  // The owner's automation switches (Admin → Settings). Unreadable settings
+  // mean the defaults, never a failed order.
+  const automation = resolveAutomation(
+    await publicGet<StoreSettings>("settings").catch(() => null),
+  );
+  // A paid order is confirmed by the payment itself. A COD order is confirmed
+  // straight away only when the owner has chosen to skip that manual step.
+  const confirmed = Boolean(payment) || (input.method === "cod" && automation.autoConfirmCod);
+
   const now = new Date();
   const iso = now.toISOString();
   const history = [
     { status: "placed" as const, at: iso },
-    ...(payment ? [{ status: "confirmed" as const, at: iso }] : []),
+    ...(confirmed
+      ? [{ status: "confirmed" as const, at: iso, ...(payment ? {} : { note: "Confirmed automatically" }) }]
+      : []),
   ];
 
   const order: Omit<Order, "id"> = {
@@ -219,7 +231,7 @@ export async function recordOrder(input: RecordOrderInput): Promise<RecordOrderR
     total: totals.total,
     payment_method: input.method,
     payment_status: payment ? "paid" : "pending",
-    order_status: payment ? "confirmed" : "placed",
+    order_status: confirmed ? "confirmed" : "placed",
     razorpay_order_id: payment?.orderId ?? null,
     razorpay_payment_id: payment?.paymentId ?? null,
     notes: input.notes,
@@ -348,6 +360,16 @@ export async function recordOrder(input: RecordOrderInput): Promise<RecordOrderR
     await step("confirmation email", async () => {
       const mail = orderPlacedEmail(toEmailOrder({ ...order, id: orderId }));
       const sent = await sendMail({ to: order.email as string, ...mail });
+      if (!sent.ok) throw new Error(sent.error || "mail not sent");
+    });
+  }
+
+  // Tell the store. Goes to the store's own mailbox, so a new order is never
+  // missed just because nobody had the admin open.
+  if (automation.ownerOrderEmail && isMailConfigured() && mailSender()) {
+    await step("store notification email", async () => {
+      const mail = ownerNewOrderEmail(toEmailOrder({ ...order, id: orderId }));
+      const sent = await sendMail({ to: mailSender(), ...mail });
       if (!sent.ok) throw new Error(sent.error || "mail not sent");
     });
   }

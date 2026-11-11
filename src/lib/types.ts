@@ -88,6 +88,8 @@ export interface Product {
   rating_count?: number;
   /** Units sold through server-written orders. */
   sold_count?: number;
+  /** When this product was included in a new-arrival email, if it has been. */
+  announced_at?: string | null;
   tags?: string[];
   created_at: string;
   updated_at: string;
@@ -180,6 +182,11 @@ export interface UserProfile {
   phone: string | null;
   phoneVerified: boolean;
   addresses: Address[];
+  /**
+   * Email preferences. A missing value means "on": customers are subscribed to
+   * new-arrival emails until they switch them off here or via the email link.
+   */
+  notifications?: { newProducts?: boolean };
   createdAt: string;
   updatedAt: string;
 }
@@ -220,6 +227,15 @@ export interface StoreSettings {
     /** True when catalogue prices already include GST. */
     inclusive?: boolean;
     label?: string;
+  };
+  /** Switches for what the store does by itself. See src/lib/automation.ts. */
+  automation?: {
+    autoConfirmCod?: boolean;
+    ownerOrderEmail?: boolean;
+    dailyDigest?: boolean;
+    reviewRequest?: boolean;
+    newProductEmails?: boolean;
+    lowStockThreshold?: number;
   };
   updated_at?: string;
 }

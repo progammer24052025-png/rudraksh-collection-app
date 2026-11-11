@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminNav } from "@/components/admin-nav";
-import { readSettings, saveSettings } from "@/lib/firebase";
+import { getFirebaseAuth, readSettings, saveSettings } from "@/lib/firebase";
+import { AUTOMATION_DEFAULTS, resolveAutomation } from "@/lib/automation";
+import { Switch } from "@/components/ui/switch";
 import { storeConfig } from "@/lib/config";
 import type { StoreSettings } from "@/lib/types";
 
@@ -42,6 +44,12 @@ type FormState = Required<
   taxRate: string;
   taxEnabled: boolean;
   taxInclusive: boolean;
+  autoConfirmCod: boolean;
+  ownerOrderEmail: boolean;
+  dailyDigest: boolean;
+  reviewRequest: boolean;
+  newProductEmails: boolean;
+  lowStockThreshold: string;
 };
 
 const DEFAULTS: FormState = {
@@ -69,12 +77,20 @@ const DEFAULTS: FormState = {
   taxRate: "5",
   taxEnabled: true,
   taxInclusive: true,
+  autoConfirmCod: AUTOMATION_DEFAULTS.autoConfirmCod,
+  ownerOrderEmail: AUTOMATION_DEFAULTS.ownerOrderEmail,
+  dailyDigest: AUTOMATION_DEFAULTS.dailyDigest,
+  reviewRequest: AUTOMATION_DEFAULTS.reviewRequest,
+  newProductEmails: AUTOMATION_DEFAULTS.newProductEmails,
+  lowStockThreshold: String(AUTOMATION_DEFAULTS.lowStockThreshold),
 };
 
 export default function AdminSettingsPage() {
   const [form, setForm] = useState<FormState>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sendingSummary, setSendingSummary] = useState(false);
+  const [announcing, setAnnouncing] = useState(false);
   // What the server says about the payment gateway. Online payment is hidden at
   // checkout unless the keys exist AND the server can write the paid order, so
   // the shop can see exactly which of the two is missing.
@@ -124,6 +140,17 @@ export default function AdminSettingsPage() {
           taxRate: String(Math.round((settings.tax?.rate ?? 0.05) * 1000) / 10),
           taxEnabled: settings.tax?.enabled ?? current.taxEnabled,
           taxInclusive: settings.tax?.inclusive ?? current.taxInclusive,
+          ...(() => {
+            const automation = resolveAutomation(settings);
+            return {
+              autoConfirmCod: automation.autoConfirmCod,
+              ownerOrderEmail: automation.ownerOrderEmail,
+              dailyDigest: automation.dailyDigest,
+              reviewRequest: automation.reviewRequest,
+              newProductEmails: automation.newProductEmails,
+              lowStockThreshold: String(automation.lowStockThreshold),
+            };
+          })(),
         }));
       })
       .catch((error) => console.error("Could not load settings:", error))
@@ -160,6 +187,14 @@ export default function AdminSettingsPage() {
           inclusive: form.taxInclusive,
           label: form.taxLabel.trim() || "GST",
         },
+        automation: {
+          autoConfirmCod: form.autoConfirmCod,
+          ownerOrderEmail: form.ownerOrderEmail,
+          dailyDigest: form.dailyDigest,
+          reviewRequest: form.reviewRequest,
+          newProductEmails: form.newProductEmails,
+          lowStockThreshold: Math.max(0, Math.floor(Number(form.lowStockThreshold) || 0)),
+        },
       });
       toast.success("Settings saved — the storefront updates immediately");
     } catch (error) {
@@ -169,6 +204,95 @@ export default function AdminSettingsPage() {
       setSaving(false);
     }
   };
+
+  const sendSummaryNow = async () => {
+    setSendingSummary(true);
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      const response = await fetch("/api/cron/daily", {
+        method: "POST",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      const data = (await response.json()) as { ok?: boolean; emailed?: boolean; headline?: string; error?: string };
+      if (data.ok && data.emailed) toast.success(`Summary emailed: ${data.headline}`);
+      else toast.error(data.error || "The summary could not be emailed. Check the SMTP settings.");
+    } catch {
+      toast.error("Could not reach the server. Try again.");
+    } finally {
+      setSendingSummary(false);
+    }
+  };
+
+  const announceNow = async () => {
+    const ok = window.confirm(
+      "Email subscribed customers about the products you added recently? Each product is only ever announced once.",
+    );
+    if (!ok) return;
+    setAnnouncing(true);
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      const response = await fetch("/api/product-alerts", {
+        method: "POST",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        skipped?: string;
+        products?: number;
+        sent?: number;
+        failed?: number;
+        overLimit?: number;
+      };
+      if (!data.ok) toast.error(data.error || "Could not send the announcement.");
+      else if (data.skipped === "first-run") toast.success("New-arrival emails are now set up. Products you add from now on will be announced.");
+      else if (data.skipped === "no-new-products") toast.info("No new products to announce — everything recent has already gone out.");
+      else if (data.skipped === "no-recipients") toast.info("No subscribed customers with an email address yet.");
+      else if (data.skipped) toast.error("Email or server credentials are not set up yet.");
+      else
+        toast.success(
+          `${data.products} product(s) announced to ${data.sent} customer(s)` +
+            (data.failed ? `, ${data.failed} failed` : "") +
+            (data.overLimit ? `, ${data.overLimit} over the daily limit` : ""),
+        );
+    } catch {
+      toast.error("Could not reach the server. Try again.");
+    } finally {
+      setAnnouncing(false);
+    }
+  };
+
+  const automationRows: Array<{
+    key: "ownerOrderEmail" | "dailyDigest" | "reviewRequest" | "newProductEmails" | "autoConfirmCod";
+    title: string;
+    detail: string;
+  }> = [
+    {
+      key: "ownerOrderEmail",
+      title: "Email me every new order",
+      detail: "Sent to the store mailbox the moment an order is placed, with the items and address.",
+    },
+    {
+      key: "dailyDigest",
+      title: "Morning summary email",
+      detail: "One email at about 8 AM listing orders to confirm, pack and ship, low stock and unread messages. Skipped on days with nothing to do.",
+    },
+    {
+      key: "reviewRequest",
+      title: "Ask for a review after delivery",
+      detail: "Adds review links to the email customers get when you mark an order delivered.",
+    },
+    {
+      key: "newProductEmails",
+      title: "Email customers about new arrivals",
+      detail: "Each morning, products you added since the last email go out in one message to customers who have not opted out. Every email has an unsubscribe link, and customers can switch it off in their account.",
+    },
+    {
+      key: "autoConfirmCod",
+      title: "Confirm cash-on-delivery orders automatically",
+      detail: "Off: you confirm each COD order yourself (safer against fake orders). On: they skip straight to “to pack”. Paid orders are always confirmed automatically.",
+    },
+  ];
 
   if (loading) {
     return (
@@ -435,6 +559,62 @@ export default function AdminSettingsPage() {
                 server.
               </p>
             ) : null}
+          </div>
+
+          <div className="space-y-4 border-t border-border pt-6">
+            <div>
+              <h2 className="text-sm font-medium">Automation</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                What the store does by itself. Switch anything off to do it by hand — every step
+                can still be changed manually from Orders and Products.
+              </p>
+            </div>
+
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {automationRows.map((row) => (
+                <li key={row.key} className="flex items-start justify-between gap-4 p-3">
+                  <label htmlFor={`auto-${row.key}`} className="cursor-pointer">
+                    <span className="block text-sm font-medium">{row.title}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{row.detail}</span>
+                  </label>
+                  <Switch
+                    id={`auto-${row.key}`}
+                    checked={form[row.key]}
+                    onCheckedChange={(checked) => setForm({ ...form, [row.key]: checked })}
+                  />
+                </li>
+              ))}
+            </ul>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="low-stock">Warn me when stock is at or below</Label>
+                <Input
+                  id="low-stock"
+                  type="number"
+                  min={0}
+                  value={form.lowStockThreshold}
+                  onChange={(event) => setForm({ ...form, lowStockThreshold: event.target.value })}
+                />
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <Button type="button" variant="outline" onClick={sendSummaryNow} disabled={sendingSummary}>
+                  {sendingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Send summary now
+                </Button>
+                <Button type="button" variant="outline" onClick={announceNow} disabled={announcing}>
+                  {announcing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Announce new arrivals now
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Always automatic: order confirmation and status emails to customers, stock counts,
+              sold-out and low-stock labels, Bestseller and New badges, back-in-stock emails when
+              you restock, coupon limits and expiry, and recording a paid order even if the
+              customer closes the page.
+            </p>
           </div>
 
           <Button onClick={handleSave} disabled={saving}>

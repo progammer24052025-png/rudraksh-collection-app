@@ -36,6 +36,13 @@ function readServiceAccount(): ServiceAccount | null {
 
 export const isSecureCheckout = (): boolean => readServiceAccount() !== null;
 
+/**
+ * A secret only the server knows, for signing links such as "unsubscribe".
+ * Derived from the service-account key so no extra environment variable is
+ * needed; null when the service account is not configured.
+ */
+export const serverSecret = (): string | null => readServiceAccount()?.private_key ?? null;
+
 function databaseUrl(account: ServiceAccount | null): string {
   const explicit = process.env.FIREBASE_DATABASE_URL || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
   if (explicit) return explicit.replace(/\/$/, "");

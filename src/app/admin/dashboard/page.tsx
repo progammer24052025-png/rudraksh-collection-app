@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Package, ShoppingBag, TrendingUp, Plus, ArrowRight, IndianRupee } from "lucide-react";
+import { Package, ShoppingBag, TrendingUp, Plus, ArrowRight, IndianRupee, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
 import {
@@ -12,11 +12,13 @@ import {
   subscribeMessages,
   subscribeBrands,
   subscribeCategories,
+  subscribeSettings,
 } from "@/lib/firebase";
+import { SHIPPED_FOLLOW_UP_DAYS, resolveAutomation } from "@/lib/automation";
 import { statusLabel } from "@/lib/orders";
 import { ADMIN_GROUPS } from "@/lib/admin-nav";
 import { topLevelCategories } from "@/lib/categories";
-import type { Brand, Category, ContactMessage, Order, Product } from "@/lib/types";
+import type { Brand, Category, ContactMessage, Order, Product, StoreSettings } from "@/lib/types";
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
 
   useEffect(() => {
     const offOrders = subscribeOrders(setOrders);
@@ -31,7 +34,9 @@ export default function AdminDashboard() {
     const offMessages = subscribeMessages(setMessages);
     const offBrands = subscribeBrands(setBrands);
     const offCategories = subscribeCategories(setCategories);
+    const offSettings = subscribeSettings(setSettings);
     return () => {
+      offSettings();
       offOrders();
       offProducts();
       offMessages();
@@ -40,17 +45,51 @@ export default function AdminDashboard() {
     };
   }, []);
 
+  const automation = useMemo(() => resolveAutomation(settings), [settings]);
+
+  // Today's to-do list, worked out from live data. Each line is one job and
+  // links straight to the screen where it is done; an empty list means done.
+  const tasks = useMemo(() => {
+    const count = (status: Order["order_status"]) =>
+      orders.filter((order) => order.order_status === status).length;
+    const stuck = orders.filter(
+      (order) =>
+        order.order_status === "shipped" &&
+        Date.now() - Date.parse(order.updated_at || order.created_at || "") > SHIPPED_FOLLOW_UP_DAYS * 86_400_000,
+    ).length;
+    const unverified = orders.filter(
+      (order) => order.client_written && !["delivered", "cancelled"].includes(order.order_status),
+    ).length;
+    const activeProducts = products.filter((product) => product.status === "active");
+    const soldOut = activeProducts.filter((product) => (product.stock ?? 0) <= 0).length;
+    const low = activeProducts.filter(
+      (product) => (product.stock ?? 0) > 0 && (product.stock ?? 0) <= automation.lowStockThreshold,
+    ).length;
+    const unread = messages.filter((message) => message.status === "new").length;
+
+    return [
+      { n: count("placed"), label: "to confirm", noun: "order", href: "/admin/orders?status=placed" },
+      { n: count("confirmed"), label: "to pack", noun: "order", href: "/admin/orders?status=confirmed" },
+      { n: count("packed"), label: "to ship", noun: "order", href: "/admin/orders?status=packed" },
+      { n: stuck, label: `shipped over ${SHIPPED_FOLLOW_UP_DAYS} days ago — check delivery`, noun: "parcel", href: "/admin/orders?status=shipped" },
+      { n: unverified, label: "with a total to double-check", noun: "order", href: "/admin/orders" },
+      { n: soldOut, label: "sold out — restock or hide", noun: "product", href: "/admin/products" },
+      { n: low, label: "running low", noun: "product", href: "/admin/products" },
+      { n: unread, label: "to read", noun: "message", href: "/admin/messages" },
+    ].filter((task) => task.n > 0);
+  }, [orders, products, messages, automation.lowStockThreshold]);
+
   const stats = useMemo(() => {
     const active = orders.filter((order) => order.order_status !== "cancelled");
     return {
       products: products.length,
-      lowStock: products.filter((product) => (product.stock ?? 0) <= 3 && product.status === "active").length,
+      lowStock: products.filter((product) => (product.stock ?? 0) <= automation.lowStockThreshold && product.status === "active").length,
       orders: orders.length,
       pending: orders.filter((order) => ["placed", "confirmed", "packed"].includes(order.order_status)).length,
       revenue: active.reduce((sum, order) => sum + (order.total ?? 0), 0),
       newMessages: messages.filter((message) => message.status === "new").length,
     };
-  }, [orders, products, messages]);
+  }, [orders, products, messages, automation.lowStockThreshold]);
 
   const recent = orders.slice(0, 6);
 
@@ -78,6 +117,39 @@ export default function AdminDashboard() {
             </Link>
           </Button>
         </div>
+
+        <section className="mb-8 rounded-lg border border-border bg-card" aria-labelledby="tasks-heading">
+          <div className="border-b border-border p-4">
+            <h2 id="tasks-heading" className="font-serif text-lg font-medium">Needs your attention</h2>
+            <p className="text-xs text-muted-foreground">
+              Everything else is handled automatically. Work down this list and the day is done.
+            </p>
+          </div>
+          {tasks.length === 0 ? (
+            <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-sage" /> Nothing is waiting on you right now.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {tasks.map((task) => (
+                <li key={`${task.noun}-${task.label}`}>
+                  <Link
+                    href={task.href}
+                    className="flex items-center justify-between gap-3 p-4 text-sm transition-colors hover:bg-muted/40"
+                  >
+                    <span>
+                      <span className="mr-2 inline-flex min-w-7 justify-center rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                        {task.n}
+                      </span>
+                      {task.noun}{task.n === 1 ? "" : "s"} {task.label}
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={ShoppingBag} label="Orders" value={String(stats.orders)} detail={`${stats.pending} in progress`} />

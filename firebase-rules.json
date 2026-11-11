@@ -171,6 +171,10 @@
           ".read": "auth != null && auth.uid === $uid",
           ".write": "auth != null && auth.uid === $uid"
         }
+      },
+      "serverState": {
+        ".read": false,
+        ".write": false
       }
     }
   }

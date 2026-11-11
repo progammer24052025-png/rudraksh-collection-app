@@ -13,6 +13,8 @@ import type { Order, OrderStatus } from "@/lib/types";
 export type MailContent = { subject: string; html: string; text: string };
 
 export type EmailOrderItem = {
+  /** Present for stored orders; lets the delivered email link to the product. */
+  productId?: string | null;
   name: string;
   brand?: string | null;
   size?: string | null;
@@ -259,6 +261,7 @@ export function toEmailOrder(order: Order): EmailOrder {
     pincode: order.pincode,
     items: Array.isArray(order.items)
       ? order.items.map((item) => ({
+          productId: item.productId,
           name: item.name,
           brand: item.brand,
           size: item.size,
@@ -507,8 +510,40 @@ export function loginAlertEmail(input: {
   };
 }
 
-export function orderStatusEmail(order: EmailOrder, status: OrderStatus): MailContent {
+/** "How was it?" links for a delivered order — one per distinct product. */
+function reviewLinks(order: EmailOrder): Array<{ name: string; url: string }> {
+  const seen = new Set<string>();
+  const links: Array<{ name: string; url: string }> = [];
+  for (const item of order.items ?? []) {
+    if (!item.productId || seen.has(item.productId)) continue;
+    seen.add(item.productId);
+    links.push({
+      name: item.name,
+      url: `${siteUrl}/products/${encodeURIComponent(item.productId)}#reviews-heading`,
+    });
+  }
+  return links.slice(0, 6);
+}
+
+export function orderStatusEmail(
+  order: EmailOrder,
+  status: OrderStatus,
+  options: { reviewRequest?: boolean } = {},
+): MailContent {
   const copy = STATUS_COPY[status] ?? STATUS_COPY.placed;
+  const reviews = status === "delivered" && options.reviewRequest ? reviewLinks(order) : [];
+  const reviewBlock = reviews.length
+    ? `<div style="margin:20px 0 0;padding:14px 16px;border:1px solid ${LINE};border-radius:12px;">
+        <div style="font-size:14px;font-weight:600;color:${INK};">How was it?</div>
+        <div style="margin-top:4px;font-size:13px;line-height:1.6;color:${MUTED};">A short review helps other parents choose. It takes a minute:</div>
+        ${reviews
+          .map(
+            (link) =>
+              `<div style="margin-top:8px;font-size:13px;"><a href="${link.url}" style="color:${INK};font-weight:600;">Review ${escape(link.name)}</a></div>`,
+          )
+          .join("")}
+      </div>`
+    : "";
 
   const blocks = `
     <div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">
@@ -519,7 +554,8 @@ export function orderStatusEmail(order: EmailOrder, status: OrderStatus): MailCo
     ${order.items?.length ? itemsTable(order.items) : ""}
     <p style="margin:18px 0 0;font-size:14px;line-height:1.7;color:${MUTED};">
       To follow your parcel, open the tracking page and enter this order number with the last four digits of your phone number.
-    </p>`;
+    </p>
+    ${reviewBlock}`;
 
   const text = [
     greeting(order.customer_name),
@@ -529,6 +565,9 @@ export function orderStatusEmail(order: EmailOrder, status: OrderStatus): MailCo
     copy.intro,
     "",
     `Track your order: ${trackUrl}`,
+    ...(reviews.length
+      ? ["", "How was it? A short review helps other parents choose:", ...reviews.map((link) => `- ${link.name}: ${link.url}`)]
+      : []),
     "",
     `${storeConfig.name} · ${storeConfig.location}`,
     storeConfig.email,
@@ -544,5 +583,172 @@ export function orderStatusEmail(order: EmailOrder, status: OrderStatus): MailCo
       cta: { label: "Track your order", href: trackUrl },
     }),
     text,
+  };
+}
+
+// ── Mail to the store itself ────────────────────────────────────────────────
+
+const adminUrl = (path: string) => `${siteUrl}${path}`;
+
+/** "You have a new order" — sent to the store's own mailbox. */
+export function ownerNewOrderEmail(order: EmailOrder): MailContent {
+  const paid = order.payment_status === "paid";
+  const payment = order.payment_method === "cod" ? "Cash on delivery — collect on delivery" : paid ? "Paid online" : "Online payment pending";
+  const address = [order.address, [order.city, order.state].filter(Boolean).join(", "), order.pincode ? `PIN ${order.pincode}` : null]
+    .filter(Boolean)
+    .join(", ");
+
+  const blocks = `
+    <div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:17px;color:${INK};">${escape(order.order_number)} · ${money(order.total)}</div>
+      <div style="margin-top:4px;font-size:13px;color:${MUTED};">${escape(payment)}</div>
+    </div>
+    ${order.items?.length ? itemsTable(order.items) : ""}
+    <div style="margin:18px 0 0;font-size:13px;line-height:1.7;color:${INK};">
+      <strong>${escape(order.customer_name || "Customer")}</strong>${order.phone ? ` · ${escape(order.phone)}` : ""}<br />
+      ${escape(address)}
+    </div>`;
+
+  const lines = (order.items ?? []).map(
+    (item) => `- ${item.name}${item.size ? ` (${item.size}${item.color ? `, ${item.color}` : ""})` : ""} x ${item.quantity}`,
+  );
+
+  return {
+    subject: `New order ${order.order_number} — ${money(order.total)}${order.payment_method === "cod" ? " (COD)" : paid ? " (paid)" : ""}`,
+    html: layout({
+      preheader: `${order.customer_name || "A customer"} ordered ${money(order.total)}.`,
+      heading: "New order received",
+      intro: "A customer has just placed an order. Here is what to pack:",
+      blocks,
+      cta: { label: "Open orders", href: adminUrl("/admin/orders") },
+    }),
+    text: [
+      `New order ${order.order_number} — ${money(order.total)}`,
+      payment,
+      "",
+      ...lines,
+      "",
+      `${order.customer_name || "Customer"}${order.phone ? ` · ${order.phone}` : ""}`,
+      address,
+      "",
+      `Open orders: ${adminUrl("/admin/orders")}`,
+    ].join("\n"),
+  };
+}
+
+export type DigestSection = { title: string; lines: string[]; href: string };
+
+/** The morning "what needs doing today" email for the store. */
+export function dailyDigestEmail(input: {
+  date: string;
+  headline: string;
+  sections: DigestSection[];
+}): MailContent {
+  const blocks = input.sections
+    .map(
+      (section) => `<div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">
+        <div style="font-size:14px;font-weight:600;color:${INK};"><a href="${adminUrl(section.href)}" style="color:${INK};text-decoration:none;">${escape(section.title)}</a></div>
+        ${section.lines
+          .map((line) => `<div style="margin-top:5px;font-size:13px;line-height:1.55;color:${MUTED};">${escape(line)}</div>`)
+          .join("")}
+      </div>`,
+    )
+    .join("");
+
+  return {
+    subject: `${storeConfig.name}: ${input.headline}`,
+    html: layout({
+      preheader: input.headline,
+      heading: `Today at the store`,
+      intro: `${escape(input.date)} — ${escape(input.headline)}.`,
+      blocks,
+      cta: { label: "Open dashboard", href: adminUrl("/admin/dashboard") },
+      closing: "You can switch this summary off in Admin → Settings → Automation.",
+    }),
+    text: [
+      `${input.date} — ${input.headline}`,
+      "",
+      ...input.sections.flatMap((section) => [section.title, ...section.lines.map((line) => `  ${line}`), ""]),
+      `Dashboard: ${adminUrl("/admin/dashboard")}`,
+    ].join("\n"),
+  };
+}
+
+// ── New arrivals (to customers) ─────────────────────────────────────────────
+
+export function newArrivalsEmail(input: {
+  name?: string | null;
+  products: Array<{
+    id: string;
+    slug?: string;
+    name: string;
+    brand_name?: string;
+    price: number;
+    sale_price?: number | null;
+    images?: string[];
+  }>;
+  /** New products not shown in this email. */
+  moreCount: number;
+  unsubscribeUrl: string;
+}): MailContent {
+  const priceOf = (product: { price: number; sale_price?: number | null }) =>
+    typeof product.sale_price === "number" && product.sale_price > 0 && product.sale_price < product.price
+      ? product.sale_price
+      : product.price;
+  const urlOf = (product: { id: string; slug?: string }) =>
+    `${siteUrl}/products/${encodeURIComponent(product.slug || product.id)}`;
+  // Photos stored inline in the database cannot be linked from an email.
+  const photoOf = (product: { images?: string[] }) =>
+    (product.images ?? []).find((image) => /^https:\/\//.test(image)) ?? null;
+
+  const cards = input.products
+    .map((product) => {
+      const photo = photoOf(product);
+      const onSale = priceOf(product) < product.price;
+      return `<tr>
+        <td style="padding:10px 0;border-top:1px solid ${LINE};">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            ${photo ? `<td width="76" valign="top" style="padding-right:14px;"><a href="${urlOf(product)}"><img src="${escape(photo)}" width="76" height="96" alt="" style="display:block;width:76px;height:96px;object-fit:cover;border-radius:8px;border:0;" /></a></td>` : ""}
+            <td valign="middle">
+              ${product.brand_name ? `<div style="font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:${ROSE};">${escape(product.brand_name)}</div>` : ""}
+              <a href="${urlOf(product)}" style="display:block;margin-top:2px;font-size:15px;line-height:1.4;color:${INK};font-weight:600;text-decoration:none;">${escape(product.name)}</a>
+              <div style="margin-top:4px;font-size:14px;color:${INK};">${money(priceOf(product))}${onSale ? ` <span style="color:${MUTED};text-decoration:line-through;font-size:13px;">${money(product.price)}</span>` : ""}</div>
+            </td>
+          </tr></table>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  const count = input.products.length + input.moreCount;
+  const heading = count === 1 ? "Something new just arrived" : `${count} new arrivals`;
+  const blocks = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">${cards}</table>
+    ${input.moreCount > 0 ? `<p style="margin:14px 0 0;font-size:13px;color:${MUTED};">…and ${input.moreCount} more in the shop.</p>` : ""}
+    <p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">
+      You are getting this because you have an account with ${escape(storeConfig.name)}.
+      <a href="${input.unsubscribeUrl}" style="color:${MUTED};">Unsubscribe from new-arrival emails</a>, or change it in your account settings.
+    </p>`;
+
+  return {
+    subject: count === 1 ? `New at ${storeConfig.name}: ${input.products[0].name}` : `${count} new arrivals at ${storeConfig.name}`,
+    html: layout({
+      preheader: input.products.map((product) => product.name).slice(0, 3).join(", "),
+      heading,
+      intro: `${greeting(input.name)} we have just added ${count === 1 ? "a new piece" : "new pieces"} to the shop:`,
+      blocks,
+      cta: { label: "See what is new", href: `${siteUrl}/products` },
+    }),
+    text: [
+      greeting(input.name),
+      "",
+      `${heading} at ${storeConfig.name}:`,
+      "",
+      ...input.products.map((product) => `- ${product.name} — ${money(priceOf(product))}\n  ${urlOf(product)}`),
+      ...(input.moreCount > 0 ? ["", `...and ${input.moreCount} more: ${siteUrl}/products`] : []),
+      "",
+      `Unsubscribe from new-arrival emails: ${input.unsubscribeUrl}`,
+      "",
+      `${storeConfig.name} · ${storeConfig.location}`,
+    ].join("\n"),
   };
 }

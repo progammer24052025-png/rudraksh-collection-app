@@ -31,7 +31,8 @@ import {
 } from "@/lib/server/email-templates";
 import { clientIp, isSameOrigin, rateLimit, tooManyRequestsResponse } from "@/lib/server/http";
 import { bearer, verifyIdToken, type Caller } from "@/lib/server/id-token";
-import type { Order, OrderStatus, OrderTracking } from "@/lib/types";
+import type { Order, OrderStatus, OrderTracking, StoreSettings } from "@/lib/types";
+import { resolveAutomation } from "@/lib/automation";
 
 export const dynamic = "force-dynamic";
 // `node:tls` powers the SMTP connection, so this route must not run on Edge.
@@ -215,10 +216,11 @@ export async function POST(request: Request) {
     }
     if (!reserve(`order:${orderNumber}:${event}`)) return json({ ok: true, skipped: "duplicate" });
 
+    const automation = resolveAutomation(await readPath<StoreSettings>("settings"));
     const mail =
       event === "placed"
         ? orderPlacedEmail(toEmailOrder(order))
-        : orderStatusEmail(toEmailOrder(order), event);
+        : orderStatusEmail(toEmailOrder(order), event, { reviewRequest: automation.reviewRequest });
 
     const result = await sendMail({ to: recipient, ...mail });
     return result.ok ? json({ ok: true }) : json({ ok: false, error: result.error }, 502);

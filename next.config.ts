@@ -33,12 +33,18 @@ const contentSecurityPolicy = [
   // nonce pipeline. Third-party origins stay enumerated.
   `script-src 'self' 'unsafe-inline'${
     isDev ? " 'unsafe-eval'" : ""
-  } https://*.razorpay.com https://apis.google.com https://www.google.com https://www.gstatic.com https://accounts.google.com`,
+  } https://*.razorpay.com https://apis.google.com https://www.google.com https://www.gstatic.com https://accounts.google.com https://*.firebaseio.com https://*.firebasedatabase.app`,
+  // ^ The database hosts are required in script-src: when a WebSocket cannot be
+  // opened (office networks, some antivirus and browser extensions), the
+  // Realtime Database falls back to long-polling, which loads its data through
+  // <script> tags from the database host. Without them the catalogue never
+  // arrives on those machines and every page sits on its loading skeleton.
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.googleapis.com https://*.firebaseapp.com https://*.razorpay.com",
-  "frame-src 'self' https://*.razorpay.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://accounts.google.com",
+  // The database hosts are here for the same long-polling fallback as above.
+  "frame-src 'self' https://*.razorpay.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://accounts.google.com https://*.firebaseio.com https://*.firebasedatabase.app",
   "media-src 'self' blob: https:",
   "worker-src 'self' blob:",
   "object-src 'none'",

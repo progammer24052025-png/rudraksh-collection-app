@@ -23,6 +23,8 @@ export type OutgoingMail = {
   html: string;
   text: string;
   replyTo?: string | null;
+  /** Adds the one-click unsubscribe button mail apps show for bulk mail. */
+  listUnsubscribe?: string | null;
 };
 
 type SmtpConfig = {
@@ -174,6 +176,13 @@ function message(config: SmtpConfig, mail: OutgoingMail): string {
     `Subject: ${encodeHeader(mail.subject)}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: ${messageId}`,
+    // Only ever a URL we built ourselves; stripped of line breaks regardless.
+    ...(mail.listUnsubscribe
+      ? [
+          `List-Unsubscribe: <${mail.listUnsubscribe.replace(/[\r\n<>]/g, "")}>`,
+          "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
+        ]
+      : []),
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     "",

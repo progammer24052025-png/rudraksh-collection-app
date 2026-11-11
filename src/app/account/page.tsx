@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/store-context";
@@ -945,6 +946,27 @@ function AccountContent() {
                       <Button variant="outline" size="sm" onClick={() => setVerifyOpen(true)}>Verify</Button>
                     )}
                   </div>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+                  <label htmlFor="new-arrival-emails" className="cursor-pointer">
+                    <span className="block text-sm font-medium">New arrival emails</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                      {profile?.email
+                        ? "An email when we add new products — one a day at most. Order updates are sent either way."
+                        : "Add an email address above to hear about new products."}
+                    </span>
+                  </label>
+                  <Switch
+                    id="new-arrival-emails"
+                    checked={profile?.notifications?.newProducts !== false}
+                    disabled={!profile?.email}
+                    onCheckedChange={async (checked) => {
+                      const ok = await updateProfile({ notifications: { newProducts: checked } });
+                      if (ok) toast.success(checked ? "New arrival emails are on" : "New arrival emails are off");
+                      else toast.error("Could not save that. Please try again.");
+                    }}
+                  />
                 </div>
 
                 {editing && (
