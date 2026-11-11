@@ -54,8 +54,8 @@ export function ProgressSteps({
               <Steps.Indicator
                 className={cn(
                   "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors duration-200",
-                  "data-complete:border-sage data-complete:bg-sage data-complete:text-white",
-                  "data-current:border-sage data-current:bg-sage data-current:text-white",
+                  "data-complete:border-sage data-complete:bg-sage-ink data-complete:text-white",
+                  "data-current:border-sage data-current:bg-sage-ink data-current:text-white",
                   "data-incomplete:border-border data-incomplete:bg-cream data-incomplete:text-muted-foreground",
                 )}
               >

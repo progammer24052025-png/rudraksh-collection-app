@@ -1,10 +1,13 @@
 "use client";
 
-import React from "react";
-import { Printer, Download, X, ShieldCheck, CheckCircle2 } from "lucide-react";
+import React, { useRef } from "react";
+import { Printer, X } from "lucide-react";
+
+import { BrandLockup, BrandSeal, SealWatermark, StitchRule } from "@/components/kit/brand-mark";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/store-data";
 import { amountInWords, STORE_SELLER_DETAILS, type SellerDetails } from "@/lib/invoice-utils";
+import { printElement } from "@/lib/print-document";
 import { useStore } from "@/lib/store-context";
 
 export interface InvoiceItem {
@@ -46,8 +49,12 @@ interface TaxInvoiceProps {
   showPrintButton?: boolean;
 }
 
+const LABEL = "text-[10px] font-semibold uppercase tracking-[0.2em] text-[#596650]";
+const rupees = (value: number) => value.toFixed(2);
+
 export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoiceProps) {
   const liveStore = useStore();
+  const sheet = useRef<HTMLDivElement>(null);
   const seller: SellerDetails = {
     storeName: liveStore.storeName || liveStore.name || STORE_SELLER_DETAILS.storeName,
     tagline: liveStore.tagline || STORE_SELLER_DETAILS.tagline,
@@ -61,16 +68,20 @@ export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoice
     supportPhone: liveStore.phone || liveStore.supportPhone || liveStore.whatsapp || STORE_SELLER_DETAILS.supportPhone,
     website: liveStore.website || STORE_SELLER_DETAILS.website,
   };
+  // The shipped config carries placeholder GSTIN/PAN/phone/address. They are printed only
+  // once the store has saved its own values; until then this is an invoice, not a tax invoice.
+  const { confirmed } = liveStore;
+  const isTaxInvoice = confirmed.gstin;
+
   const invoiceNumber = data.invoiceNumber || `INV-${data.orderNumber}`;
-  const isPaid = data.paymentStatus === "paid" || data.paymentMethod === "razorpay";
+  // Only a recorded payment counts as paid; an online order can still be awaiting payment.
+  const isPaid = data.paymentStatus === "paid";
   const dateObj = typeof data.date === "string" ? new Date(data.date) : data.date;
-  const formattedDate = !isNaN(dateObj.getTime())
-    ? dateObj.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-    : new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const formattedDate = (!isNaN(dateObj.getTime()) ? dateObj : new Date()).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
   const isIntraState = data.state.trim().toLowerCase() === "gujarat";
   const taxRate = 0.05; // 5% GST standard apparel rate
@@ -80,326 +91,243 @@ export function TaxInvoice({ data, onClose, showPrintButton = true }: TaxInvoice
   const sgst = isIntraState ? Math.round(totalTax / 2) : 0;
   const igst = !isIntraState ? totalTax : 0;
 
-  const handlePrint = () => {
-    if (typeof window !== "undefined") {
-      window.print();
-    }
-  };
+  const title = isTaxInvoice ? "Tax Invoice" : "Invoice";
+  const handlePrint = () => printElement(sheet.current, `${title} ${invoiceNumber} - ${seller.storeName}`);
 
   return (
-    <div className="relative mx-auto w-full max-w-4xl bg-white text-slate-900 shadow-xl rounded-xl border border-slate-200 print:border-none print:shadow-none print:rounded-none print:m-0 print:p-0 print:max-w-none">
-      {/* Top action bar - Hidden during print */}
-      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50 rounded-t-xl print:hidden">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-emerald-600" />
-          <span className="text-sm font-semibold text-slate-800">
-            {isPaid ? "Official Tax Invoice" : "Order Bill / Cash Memo"}
-          </span>
-          <span
-            className={`text-[11px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wider ${
-              isPaid
-                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                : "bg-amber-100 text-amber-800 border border-amber-300"
-            }`}
-          >
-            {isPaid ? "Paid in Full" : "Payment Pending (COD)"}
-          </span>
-        </div>
+    <div
+      ref={sheet}
+      className="print-area relative mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-[#EAE3D9] bg-white text-[#2D2A26] shadow-sm"
+    >
+      <SealWatermark />
 
-        <div className="flex items-center gap-3">
+      {/* Action bar — never printed */}
+      <div
+        data-print-hide
+        className="relative flex items-center justify-between gap-3 border-b border-[#EAE3D9] bg-[#FAF7F2] px-6 py-3 print:hidden"
+      >
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+            isPaid ? "bg-[#E6ECDF] text-[#3F4A37]" : "bg-[#F6EADF] text-[#7D4E2D]"
+          }`}
+        >
+          {isPaid ? "Paid" : data.paymentMethod === "cod" ? "Payment on delivery" : "Payment pending"}
+        </span>
+        <div className="flex items-center gap-2">
           {showPrintButton && (
-            <Button
-              onClick={handlePrint}
-              size="sm"
-              className="gap-2 bg-slate-900 text-white hover:bg-slate-800"
-            >
-              <Printer className="h-4 w-4" /> Print / Save PDF
+            <Button onClick={handlePrint} size="sm" className="gap-2">
+              <Printer className="h-4 w-4" /> Print / save as PDF
             </Button>
           )}
           {onClose && (
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900"
-            >
+            <Button onClick={onClose} variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Close invoice">
               <X className="h-4 w-4" />
             </Button>
           )}
         </div>
       </div>
 
-      {/* Printable Invoice Container */}
-      <div className="p-6 sm:p-10 text-xs sm:text-sm font-sans leading-normal">
-        {/* Amazon-style Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b-2 border-slate-900">
+      <div className="h-1.5 w-full bg-[linear-gradient(90deg,#995C5C,#C28585_45%,#8B9A7D)]" />
+
+      <div className="relative p-6 text-xs leading-normal sm:p-10 sm:text-sm print:p-7">
+        {/* Letterhead */}
+        <div className="flex flex-col items-start justify-between gap-6 sm:flex-row">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-serif text-2xl font-black tracking-tight text-slate-900">
-                {seller.storeName}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 font-medium tracking-wide">{seller.tagline}</p>
-            <div className="mt-2 text-[11px] text-slate-600 leading-relaxed">
-              <p className="font-medium text-slate-900">{seller.legalEntity}</p>
-              <p className="whitespace-pre-line leading-relaxed">{seller.address}</p>
-              <p>{seller.cityStatePincode}</p>
+            <BrandLockup name={seller.storeName} tagline={seller.tagline} />
+            <div className="mt-3 space-y-0.5 pl-[58px] text-[11px] leading-relaxed text-[#6B6560]">
+              {isTaxInvoice ? <p className="font-medium text-[#2D2A26]">{seller.legalEntity}</p> : null}
+              {confirmed.address ? <p className="whitespace-pre-line">{seller.address}</p> : null}
+              <p>{confirmed.address ? seller.cityStatePincode : [liveStore.city, seller.cityStatePincode].filter(Boolean).join(", ")}</p>
+              {isTaxInvoice ? (
+                <p>
+                  GSTIN {seller.gstin}
+                  {seller.pan ? ` · PAN ${seller.pan}` : ""}
+                </p>
+              ) : null}
               <p>
-                <span className="font-semibold text-slate-700">GSTIN:</span> {seller.gstin} |{" "}
-                <span className="font-semibold text-slate-700">PAN:</span> {seller.pan}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-700">Support:</span> {seller.supportEmail} |{" "}
-                {seller.supportPhone}
+                {seller.supportEmail}
+                {confirmed.phone ? ` · ${seller.supportPhone}` : ""}
               </p>
             </div>
           </div>
 
-          <div className="sm:text-right shrink-0">
-            <h1 className="text-xl sm:text-2xl font-black tracking-wider uppercase text-slate-900">
-              Tax Invoice
-            </h1>
-            <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-              (Original for Recipient)
-            </p>
-            <div className="mt-3 space-y-1 text-xs">
-              <p>
-                <span className="font-semibold text-slate-700">Invoice No:</span>{" "}
-                <span className="font-mono font-bold text-slate-900">{invoiceNumber}</span>
-              </p>
-              <p>
-                <span className="font-semibold text-slate-700">Invoice Date:</span> {formattedDate}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-700">Order ID:</span>{" "}
-                <span className="font-mono font-bold text-slate-900">{data.orderNumber}</span>
-              </p>
-              <p>
-                <span className="font-semibold text-slate-700">Place of Supply:</span>{" "}
-                {data.state || "Gujarat"}
-              </p>
-            </div>
+          {/* Hang tag with the document's identity */}
+          <div className="relative shrink-0 rounded-lg border border-[#D9C9B6] bg-[#FAF7F2] px-5 pb-3 pt-5 sm:text-right">
+            <span
+              aria-hidden
+              className="absolute left-1/2 top-1.5 h-2 w-2 -translate-x-1/2 rounded-full border border-[#D9C9B6] bg-white"
+            />
+            <h1 className="font-serif text-xl tracking-wide">{title}</h1>
+            {isTaxInvoice ? (
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#995C5C]">Original for recipient</p>
+            ) : null}
+            <dl className="mt-2 grid grid-cols-[auto_auto] justify-end gap-x-3 gap-y-0.5 text-[11px]">
+              <dt className="text-[#6B6560]">Invoice no.</dt>
+              <dd className="font-mono font-semibold">{invoiceNumber}</dd>
+              <dt className="text-[#6B6560]">Date</dt>
+              <dd>{formattedDate}</dd>
+              <dt className="text-[#6B6560]">Order</dt>
+              <dd className="font-mono">{data.orderNumber}</dd>
+              <dt className="text-[#6B6560]">Place of supply</dt>
+              <dd>{data.state || "Gujarat"}</dd>
+            </dl>
           </div>
         </div>
 
-        {/* Billed To & Shipped To Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-5 border-b border-slate-200">
-          <div className="rounded-lg bg-slate-50 p-4 border border-slate-200/80">
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Billing Address
-            </h2>
-            <p className="font-bold text-slate-900 text-sm">{data.customerName}</p>
-            <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{data.address}</p>
-            <p className="text-slate-700">
-              {data.city}, {data.state} - {data.pincode}
-            </p>
-            <p className="text-slate-700 mt-1">
-              <span className="font-medium">Phone:</span> {data.phone}
-            </p>
-            {data.email && (
-              <p className="text-slate-700">
-                <span className="font-medium">Email:</span> {data.email}
-              </p>
-            )}
-            <p className="text-[11px] text-slate-600 mt-1">
-              <span className="font-medium">State Code:</span> {data.state} (India)
-            </p>
-          </div>
+        <StitchRule className="my-6 print:my-4" />
 
-          <div className="rounded-lg bg-slate-50 p-4 border border-slate-200/80">
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Shipping Address
-            </h2>
-            <p className="font-bold text-slate-900 text-sm">{data.customerName}</p>
-            <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{data.address}</p>
-            <p className="text-slate-700">
-              {data.city}, {data.state} - {data.pincode}
+        {/* Parties — orders have one address, so billing and shipping share a block. */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div>
+            <p className={LABEL}>Billed &amp; shipped to</p>
+            <p className="mt-1.5 font-serif text-base">{data.customerName}</p>
+            <div className="mt-1 space-y-0.5 text-xs leading-relaxed text-[#6B6560]">
+              <p className="whitespace-pre-line">{data.address}</p>
+              <p>
+                {data.city}, {data.state} — {data.pincode}, India
+              </p>
+              <p>
+                Phone: {data.phone}
+                {data.email ? ` · ${data.email}` : ""}
+              </p>
+            </div>
+          </div>
+          <div className="sm:text-right">
+            <p className={LABEL}>Payment</p>
+            <p className="mt-1.5 text-sm font-medium">
+              {data.paymentMethod === "cod" ? "Cash on delivery" : "Online (Razorpay)"}
             </p>
-            <p className="text-slate-700 mt-1">
-              <span className="font-medium">Phone:</span> {data.phone}
-            </p>
-            <p className="text-slate-700">
-              <span className="font-medium">Country:</span> India
-            </p>
+            <span
+              className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                isPaid ? "bg-[#E6ECDF] text-[#3F4A37]" : "bg-[#F6EADF] text-[#7D4E2D]"
+              }`}
+            >
+              {isPaid ? "Paid" : data.paymentMethod === "cod" ? "To be collected on delivery" : "Pending"}
+            </span>
+            {data.paymentId ? (
+              <p className="mt-1 text-[11px] text-[#6B6560]">
+                Ref. <span className="font-mono">{data.paymentId}</span>
+              </p>
+            ) : null}
           </div>
         </div>
 
-        {/* Order Items Table */}
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full text-left border-collapse border border-slate-300">
-            <thead>
-              <tr className="bg-slate-100 text-[11px] uppercase tracking-wider font-bold text-slate-700 border-b border-slate-300">
-                <th className="py-2.5 px-3 border-r border-slate-300 w-10 text-center">#</th>
-                <th className="py-2.5 px-3 border-r border-slate-300">Description of Goods</th>
-                <th className="py-2.5 px-3 border-r border-slate-300 text-center w-24">HSN</th>
-                <th className="py-2.5 px-3 border-r border-slate-300 text-center w-16">Qty</th>
-                <th className="py-2.5 px-3 border-r border-slate-300 text-right w-24">Gross (₹)</th>
-                <th className="py-2.5 px-3 border-r border-slate-300 text-center w-20">Tax Rate</th>
-                <th className="py-2.5 px-3 text-right w-28">Total (₹)</th>
+        {/* Items */}
+        <table className="mt-7 print:mt-5 w-full border-collapse text-left">
+          <thead>
+            <tr className="bg-[#F5EFE6] text-[10px] uppercase tracking-[0.14em] text-[#6B6560]">
+              <th className="rounded-l-md px-3 py-2 text-center font-semibold">#</th>
+              <th className="px-3 py-2 font-semibold">Description</th>
+              <th className="px-3 py-2 text-center font-semibold">HSN</th>
+              <th className="px-3 py-2 text-center font-semibold">Qty</th>
+              <th className="px-3 py-2 text-right font-semibold">Rate (₹)</th>
+              <th className="px-3 py-2 text-center font-semibold">GST</th>
+              <th className="rounded-r-md px-3 py-2 text-right font-semibold">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((item, index) => (
+              <tr key={index} className="break-inside-avoid border-b border-[#EFE8DE] align-top">
+                <td className="px-3 py-3 text-center font-mono text-[11px] text-[#6B6560]">{index + 1}</td>
+                <td className="px-3 py-3">
+                  <p className="font-medium">{item.name}</p>
+                  <p className="mt-0.5 text-[11px] text-[#6B6560]">
+                    {[item.brand, item.size ? `Size ${item.size}` : "", item.color].filter(Boolean).join(" · ")}
+                  </p>
+                </td>
+                <td className="px-3 py-3 text-center font-mono text-[11px] text-[#6B6560]">6209</td>
+                <td className="px-3 py-3 text-center font-medium">{item.quantity}</td>
+                <td className="px-3 py-3 text-right tabular-nums">{rupees(item.price)}</td>
+                <td className="px-3 py-3 text-center text-[#6B6560]">5%</td>
+                <td className="px-3 py-3 text-right font-medium tabular-nums">{rupees(item.price * item.quantity)}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {data.items.map((item, index) => {
-                const lineTotal = item.price * item.quantity;
-                return (
-                  <tr key={index} className="hover:bg-slate-50/50">
-                    <td className="py-3 px-3 border-r border-slate-300 text-center text-slate-500 font-mono text-xs">
-                      {index + 1}
-                    </td>
-                    <td className="py-3 px-3 border-r border-slate-300">
-                      <p className="font-semibold text-slate-900">{item.name}</p>
-                      <div className="text-[11px] text-slate-500 flex flex-wrap gap-2 mt-0.5">
-                        {item.brand && <span>Brand: {item.brand}</span>}
-                        {item.size && <span>Size: {item.size}</span>}
-                        {item.color && <span>Color: {item.color}</span>}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 border-r border-slate-300 text-center font-mono text-xs text-slate-600">
-                      6209
-                    </td>
-                    <td className="py-3 px-3 border-r border-slate-300 text-center font-semibold text-slate-800">
-                      {item.quantity}
-                    </td>
-                    <td className="py-3 px-3 border-r border-slate-300 text-right font-mono text-slate-700">
-                      {item.price.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 border-r border-slate-300 text-center text-slate-600">
-                      5% GST
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-semibold text-slate-900">
-                      {lineTotal.toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
 
-        {/* Calculation & Tax Breakdown Grid */}
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 gap-6 pt-2">
-          {/* Left Column: Tax Split-up & Words */}
-          <div className="sm:col-span-7 space-y-4">
-            <div className="rounded-lg border border-slate-200 p-3 bg-slate-50 text-xs">
-              <p className="font-bold text-slate-800 mb-2 uppercase tracking-wider text-[10px]">
-                Tax Details & GST Breakup
-              </p>
-              <div className="space-y-1 text-slate-600">
+        {/* Tax breakup + totals */}
+        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-12">
+          <div className="space-y-4 sm:col-span-7">
+            <div className="break-inside-avoid rounded-lg border border-[#EAE3D9] p-4 text-xs">
+              <p className={LABEL}>GST breakup (included in prices)</p>
+              <div className="mt-2 space-y-1 text-[#6B6560]">
                 {isIntraState ? (
                   <>
                     <div className="flex justify-between">
-                      <span>Central GST (CGST @ 2.5%):</span>
-                      <span className="font-mono text-slate-900 font-medium">₹{cgst.toFixed(2)}</span>
+                      <span>CGST @ 2.5%</span>
+                      <span className="tabular-nums text-[#2D2A26]">₹{rupees(cgst)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>State GST (SGST @ 2.5%):</span>
-                      <span className="font-mono text-slate-900 font-medium">₹{sgst.toFixed(2)}</span>
+                      <span>SGST @ 2.5%</span>
+                      <span className="tabular-nums text-[#2D2A26]">₹{rupees(sgst)}</span>
                     </div>
                   </>
                 ) : (
                   <div className="flex justify-between">
-                    <span>Integrated GST (IGST @ 5.0%):</span>
-                    <span className="font-mono text-slate-900 font-medium">₹{igst.toFixed(2)}</span>
+                    <span>IGST @ 5%</span>
+                    <span className="tabular-nums text-[#2D2A26]">₹{rupees(igst)}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-slate-300 pt-1 font-semibold text-slate-900">
-                  <span>Total Tax Included:</span>
-                  <span className="font-mono">₹{totalTax.toFixed(2)}</span>
+                <div className="flex justify-between border-t border-[#EAE3D9] pt-1 font-medium text-[#2D2A26]">
+                  <span>Total tax</span>
+                  <span className="tabular-nums">₹{rupees(totalTax)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg text-xs">
-              <span className="font-semibold text-slate-700 uppercase tracking-wide text-[10px] block mb-0.5">
-                Amount in Words:
-              </span>
-              <p className="font-serif italic font-medium text-slate-900">
-                {amountInWords(data.total)}
-              </p>
-            </div>
-
-            <div className="text-[11px] text-slate-500 space-y-1">
-              <p>
-                <span className="font-semibold text-slate-700">Payment Mode:</span>{" "}
-                <span className="uppercase font-medium text-slate-900">
-                  {data.paymentMethod === "cod" ? "Cash on Delivery" : "Online Payment (Razorpay)"}
-                </span>
-              </p>
-              <p>
-                <span className="font-semibold text-slate-700">Payment Status:</span>{" "}
-                <span
-                  className={`font-semibold ${
-                    isPaid ? "text-emerald-700" : "text-amber-700"
-                  }`}
-                >
-                  {isPaid ? "PAID" : "PENDING (Collect upon delivery)"}
-                </span>
-              </p>
-              {data.paymentId && (
-                <p>
-                  <span className="font-semibold text-slate-700">Gateway Ref:</span>{" "}
-                  <span className="font-mono">{data.paymentId}</span>
-                </p>
-              )}
+            <div className="rounded-lg bg-[#FAF7F2] p-4 text-xs">
+              <p className={LABEL}>Amount in words</p>
+              <p className="mt-1 font-serif text-sm italic">{amountInWords(data.total)}</p>
             </div>
           </div>
 
-          {/* Right Column: Totals Summary */}
+          {/* Totals on a hang tag */}
           <div className="sm:col-span-5">
-            <div className="rounded-lg border border-slate-300 divide-y divide-slate-200 text-xs">
-              <div className="flex justify-between p-2.5">
-                <span className="text-slate-600">Items Subtotal:</span>
-                <span className="font-mono font-medium text-slate-900">
-                  ₹{data.subtotal.toFixed(2)}
-                </span>
+            <div className="relative break-inside-avoid rounded-xl border border-dashed border-[#C9A9A9] bg-[#FDFBF8] px-5 pb-4 pt-6 text-xs">
+              <span aria-hidden className="absolute left-5 top-2.5 h-2.5 w-2.5 rounded-full border border-[#C9A9A9] bg-white" />
+              <div className="flex justify-between py-0.5">
+                <span className="text-[#6B6560]">Items subtotal</span>
+                <span className="tabular-nums">₹{rupees(data.subtotal)}</span>
               </div>
               {data.discount && data.discount > 0 ? (
-                <div className="flex justify-between p-2.5 bg-emerald-50/50 text-emerald-800">
-                  <span>
-                    Discount {data.couponCode ? `(${data.couponCode})` : ""}:
-                  </span>
-                  <span className="font-mono font-semibold">−₹{data.discount.toFixed(2)}</span>
+                <div className="flex justify-between py-0.5 text-[#3F4A37]">
+                  <span>Discount{data.couponCode ? ` (${data.couponCode})` : ""}</span>
+                  <span className="tabular-nums">−₹{rupees(data.discount)}</span>
                 </div>
               ) : null}
-              <div className="flex justify-between p-2.5">
-                <span className="text-slate-600">Shipping & Delivery:</span>
-                <span className="font-mono font-medium text-slate-900">
-                  {!data.shipping || data.shipping === 0 ? "FREE" : `₹${data.shipping.toFixed(2)}`}
-                </span>
+              <div className="flex justify-between py-0.5">
+                <span className="text-[#6B6560]">Delivery</span>
+                <span className="tabular-nums">{!data.shipping ? "Free" : `₹${rupees(data.shipping)}`}</span>
               </div>
-              <div className="flex justify-between p-2.5 bg-slate-50">
-                <span className="text-slate-600">Taxes (GST Included):</span>
-                <span className="font-mono font-medium text-slate-900">
-                  ₹{totalTax.toFixed(2)}
-                </span>
+              <div className="flex justify-between py-0.5">
+                <span className="text-[#6B6560]">GST (included)</span>
+                <span className="tabular-nums">₹{rupees(totalTax)}</span>
               </div>
-              <div className="flex justify-between p-3 bg-slate-900 text-white font-bold text-sm sm:text-base">
-                <span>Grand Total:</span>
-                <span className="font-mono">{formatPrice(data.total)}</span>
+              <div className="mt-2 flex items-baseline justify-between border-t border-[#EAE3D9] pt-2">
+                <span className="font-serif text-base">Grand total</span>
+                <span className="text-lg font-semibold tabular-nums">{formatPrice(data.total)}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Declaration & Signatory Footer */}
-        <div className="mt-8 pt-6 border-t-2 border-slate-300 grid grid-cols-1 sm:grid-cols-2 gap-6 items-end">
-          <div className="text-[11px] text-slate-500 space-y-1">
-            <p className="font-bold uppercase tracking-wider text-slate-700">Terms & Conditions:</p>
-            <p>1. Goods once sold can be returned or exchanged within 7 days in original condition.</p>
-            <p>2. Whether tax is payable under reverse charge basis: <strong className="text-slate-800">No</strong>.</p>
-            <p>3. This is a computer-generated invoice and requires no physical signature.</p>
+        {/* Terms and sign-off */}
+        <StitchRule className="mt-8 print:mt-5" colour="#8B9A7D" />
+        <div className="mt-5 grid break-inside-avoid grid-cols-1 items-end gap-6 sm:grid-cols-2">
+          <div className="space-y-1 text-[11px] text-[#6B6560]">
+            <p className={LABEL}>Terms</p>
+            <p>1. Returns and size exchanges within 7 days of delivery, unused with tags.</p>
+            {isTaxInvoice ? <p>2. Tax payable under reverse charge: No.</p> : null}
+            <p>{isTaxInvoice ? "3" : "2"}. This is a computer-generated invoice and needs no signature.</p>
+            <p className="pt-2 font-serif text-sm italic text-[#995C5C]">Thank you for shopping with us.</p>
           </div>
 
-          <div className="sm:text-right space-y-2">
-            <p className="text-xs font-semibold text-slate-800">
-              For {seller.storeName}
-            </p>
-            <div className="inline-block p-2 rounded border border-dashed border-slate-300 text-center">
-              <div className="flex items-center justify-center gap-1.5 text-emerald-700 font-semibold text-xs">
-                <CheckCircle2 className="h-4 w-4" /> Authorized Signatory
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono block mt-0.5">Digitally Verified</span>
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-dashed border-[#C9A9A9]">
+              <BrandSeal size={50} />
             </div>
+            <p className="text-[11px] font-medium">For {seller.storeName}</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#6B6560]">Authorised signatory</p>
           </div>
         </div>
       </div>

@@ -30,7 +30,7 @@ export default function ShippingPage() {
       <Header />
       <LegalNav />
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <main id="main" className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         {/* Hero Header */}
         <div className="text-center sm:text-left border-b border-border/80 pb-8">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
@@ -155,7 +155,7 @@ export default function ShippingPage() {
                 • <strong>Orders ₹{storeConfig.freeShippingThreshold} or Above:</strong> Completely <strong>FREE DELIVERY</strong> anywhere in India.
               </p>
               <p>
-                • <strong>Orders Below ₹{storeConfig.freeShippingThreshold}:</strong> A nominal flat shipping charge of <strong>₹{storeConfig.shippingFee}</strong> is applied.
+                • <strong>Orders Below ₹{storeConfig.freeShippingThreshold}:</strong> A delivery charge applies, based on how far your PIN code is from our Vadodara store. You can check the exact charge on any product page with your PIN code, and it is shown at checkout before you pay.
               </p>
               <p>
                 • <strong>No Surprise Taxes:</strong> The final cart total includes all shipping charges and GST before checkout. We never charge hidden handling fees at delivery.

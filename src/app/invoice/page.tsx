@@ -142,7 +142,7 @@ export default function InvoicePage() {
       <div className="print:hidden">
         <Header />
       </div>
-      <main>
+      <main id="main">
         <Suspense
           fallback={
             <div className="flex min-h-[50vh] items-center justify-center">

@@ -58,10 +58,10 @@ export default function ContactPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main>
+      <main id="main">
         <section className="bg-cream py-16">
           <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Contact</p>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Contact</p>
             <h1 className="mt-4 font-serif text-4xl font-medium sm:text-5xl">How can we help?</h1>
             <p className="mt-4 text-lg text-muted-foreground">
               Questions about an order, a size or a return? Send us a message and we&apos;ll reply within
@@ -168,25 +168,25 @@ export default function ContactPage() {
                 <h2 className="font-serif text-lg font-medium">Store details</h2>
                 <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
                   <li className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sage" />
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sage-ink" />
                     <span className="whitespace-pre-line">{store.address || store.location}</span>
                   </li>
                   {store.openingHours && (
                     <li className="flex items-start gap-3">
-                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-sage" />
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-sage-ink" />
                       <span>{store.openingHours}</span>
                     </li>
                   )}
                   {store.phone && (
                     <li className="flex items-start gap-3">
-                      <Phone className="mt-0.5 h-4 w-4 shrink-0 text-sage" />
+                      <Phone className="mt-0.5 h-4 w-4 shrink-0 text-sage-ink" />
                       <a href={`tel:${store.phone.replace(/\s/g, "")}`} className="hover:text-foreground">
                         {store.phone}
                       </a>
                     </li>
                   )}
                   <li className="flex items-start gap-3">
-                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-sage" />
+                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-sage-ink" />
                     <a href={`mailto:${store.supportEmail}`} className="hover:text-foreground">
                       {store.supportEmail}
                     </a>

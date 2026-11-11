@@ -23,10 +23,10 @@ export function FreeShippingBar({
   return (
     <div className={cn("rounded-lg border border-border bg-card p-4", className)}>
       <p className="flex items-center gap-2 text-sm">
-        <Truck className={cn("h-4 w-4 shrink-0", unlocked ? "text-sage" : "text-muted-foreground")} />
+        <Truck className={cn("h-4 w-4 shrink-0", unlocked ? "text-sage-ink" : "text-muted-foreground")} />
         {unlocked ? (
           <span>
-            <span className="font-medium text-sage">You have free delivery</span> on this order.
+            <span className="font-medium text-sage-ink">You have free delivery</span> on this order.
           </span>
         ) : (
           <span>

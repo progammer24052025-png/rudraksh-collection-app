@@ -27,6 +27,8 @@ export interface RailGarment {
    * hung instead, so a piece never looks like a picture pinned to a rail.
    */
   cutout?: string;
+  /** Other photos of the piece, tried for the automatic cut-out when `image` will not separate. */
+  altImages?: string[];
   /** Back photo; the front photo is reused when omitted. */
   backImage?: string;
   /** Side-on photo shown while the piece rests on the rail. */
@@ -40,6 +42,66 @@ export interface RailGarment {
    * link — the detail overlay is skipped entirely.
    */
   href?: string;
+}
+
+/** Resolves when `src` loads as an image, false when it 404s or fails. */
+function imageLoads(src: string) {
+  return new Promise<boolean>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(true);
+    image.onerror = () => resolve(false);
+    image.src = src;
+  });
+}
+
+/**
+ * Picks the pieces that can hang as real cloth.
+ *
+ * Each candidate gets its saved cut-out if that file loads, otherwise an automatic
+ * cut-out from its photos. Lifestyle shots (a child wearing the outfit outdoors)
+ * cannot be separated in the browser, so those pieces are left off the rail rather
+ * than hung as a framed photo. When fewer than `min` pieces separate, the first
+ * `max` candidates are returned unchanged so the rail is never empty.
+ */
+export function useClothItems(candidates: RailGarment[], max: number, min = 3) {
+  const [state, setState] = React.useState({ ready: false, items: [] as RailGarment[] });
+  const key = candidates.map((item) => `${item.id}:${item.cutout ?? ""}:${item.image ?? ""}`).join("|");
+
+  React.useEffect(() => {
+    if (!candidates.length) {
+      setState({ ready: true, items: [] });
+      return;
+    }
+    let alive = true;
+    setState({ ready: false, items: [] });
+    void (async () => {
+      const found: RailGarment[] = [];
+      for (const item of candidates) {
+        if (found.length >= max) break;
+        let cloth: string | undefined;
+        if (item.cutout && (await imageLoads(item.cutout))) cloth = item.cutout;
+        for (const photo of cloth ? [] : [item.image, ...(item.altImages ?? [])]) {
+          if (!photo) continue;
+          const result = await cutoutFor(photo);
+          if (!alive) return;
+          if (result) {
+            cloth = result.url;
+            break;
+          }
+        }
+        if (!alive) return;
+        if (cloth) found.push({ ...item, cutout: cloth });
+      }
+      setState({ ready: true, items: found.length >= min ? found : candidates.slice(0, max) });
+    })();
+    return () => {
+      alive = false;
+    };
+    // `key` captures everything about the candidates that changes the result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, max, min]);
+
+  return state;
 }
 
 export interface ClothingRailHeroLabels {
@@ -631,22 +693,34 @@ export function ClothingRailHero({
    * readable without CORS) and keep the plain hung photo.
    */
   React.useEffect(() => {
-    const pending = items.filter((item) => item.image && !item.cutout);
+    // Every piece is cut out here unless it has a saved cut-out that actually loads.
+    // Saved paths used to win even when the file was never committed, which left a
+    // broken image and no automatic cut-out.
+    const pending = items.filter((item) => item.image && (!item.cutout || brokenCloth[item.cutout]));
     if (!pending.length) return;
     let alive = true;
     void (async () => {
       for (const item of pending) {
-        const result = await cutoutFor(item.image as string);
-        if (!alive || !result) continue;
-        setAutoCloth((old) => (old[item.id] ? old : { ...old, [item.id]: result.url }));
+        if (autoCloth[item.id]) continue;
+        // Lifestyle shots will not separate; another photo of the same piece often will.
+        const candidates = [item.image as string, ...(item.altImages ?? [])].filter(Boolean);
+        for (const candidate of candidates) {
+          const result = await cutoutFor(candidate);
+          if (!alive) return;
+          if (!result) continue;
+          setAutoCloth((old) => (old[item.id] ? old : { ...old, [item.id]: result.url }));
+          break;
+        }
       }
     })();
     return () => { alive = false; };
-  }, [items]);
+    // autoCloth is read only to skip finished pieces; re-running on it would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, brokenCloth]);
 
   const resolveCloth = (item: RailGarment) => {
-    const src = item.cutout ?? autoCloth[item.id];
-    return src && !brokenCloth[src] ? src : undefined;
+    if (item.cutout && !brokenCloth[item.cutout]) return item.cutout;
+    return autoCloth[item.id];
   };
 
   React.useLayoutEffect(() => {

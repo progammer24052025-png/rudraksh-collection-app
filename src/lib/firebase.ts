@@ -682,12 +682,29 @@ export async function updateOrderStatus(
     updated_at: now,
   });
 
-  await updateValue(["tracking", current.order_number], {
-    order_status: status,
-    payment_status: paymentStatus,
-    status_history: history,
-    updated_at: now,
-  });
+  // The tracking rule only accepts a record that carries `order_number` and a 4-character
+  // `phone_last4`. Older orders (and any where the checkout's tracking step failed) have no
+  // complete record, so a status-only update was refused with PERMISSION_DENIED after the
+  // order itself had already saved. Sending the identifying fields every time lets the update
+  // rebuild a missing record instead.
+  const phoneLast4 = String(current.phone ?? "").replace(/\D/g, "").slice(-4);
+  let trackingFailed = false;
+  try {
+    await updateValue(["tracking", current.order_number], {
+      order_number: current.order_number,
+      ...(phoneLast4.length === 4 ? { phone_last4: phoneLast4 } : {}),
+      order_status: status,
+      payment_status: paymentStatus,
+      status_history: history,
+      total: current.total,
+      created_at: current.created_at ?? now,
+      updated_at: now,
+    });
+  } catch (error) {
+    // The order is already updated; finish the remaining steps, then say exactly what failed.
+    console.warn("Order updated, but its tracking record was refused:", error);
+    trackingFailed = true;
+  }
 
   // A cancelled order puts its units back, but only when the server actually
   // took them out — otherwise browsers that never decremented would inflate it.
@@ -708,6 +725,16 @@ export async function updateOrderStatus(
   // Customers hear about every meaningful step, not just the first one.
   if (status !== current.order_status) {
     void requestEmail({ kind: "order", orderNumber: current.order_number, event: status });
+  }
+
+  if (trackingFailed) throw new TrackingSyncError(current.order_number);
+}
+
+/** The order saved, but the customer-facing tracking copy could not be written. */
+export class TrackingSyncError extends Error {
+  constructor(public orderNumber: string) {
+    super(`Order ${orderNumber} was updated, but its tracking page could not be updated.`);
+    this.name = "TrackingSyncError";
   }
 }
 

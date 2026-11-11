@@ -110,7 +110,7 @@ export function CartOffers({
       {applied ? (
         <div className="flex items-center justify-between rounded-lg bg-sage/10 px-3 py-2 text-sm">
           <span className="flex items-center gap-2">
-            <Tag className="h-4 w-4 text-sage" />
+            <Tag className="h-4 w-4 text-sage-ink" />
             <span>
               <span className="font-mono text-xs font-semibold">{applied.code}</span> added — saves{" "}
               {formatPrice(couponDiscount(applied, subtotal))}

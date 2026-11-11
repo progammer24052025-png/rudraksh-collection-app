@@ -51,7 +51,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     : isBestseller(product)
       ? { label: "Bestseller", className: "bg-amber-500 text-white" }
       : isNewArrival(product)
-        ? { label: "New", className: "bg-sage text-white" }
+        ? { label: "New", className: "bg-sage-ink text-white" }
         : null;
 
   return (
@@ -95,7 +95,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
             aria-pressed={saved}
           >
-            <Heart className={`h-4 w-4 ${saved ? "fill-rose text-rose" : ""}`} />
+            <Heart className={`h-4 w-4 ${saved ? "fill-rose text-rose-ink" : ""}`} />
           </Button>
 
           {!inStock && (

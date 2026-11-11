@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 const TONES = {
   sage: {
     shell: "bg-sage/12 text-foreground",
-    icon: "bg-sage text-white",
-    stub: "bg-sage text-white",
+    icon: "bg-sage-ink text-white",
+    stub: "bg-sage-ink text-white",
   },
   ink: {
     shell: "bg-secondary text-foreground",

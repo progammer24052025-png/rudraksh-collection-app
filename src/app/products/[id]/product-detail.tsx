@@ -9,7 +9,7 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
-import { ClothingRailHero, type RailGarment } from "@/components/ui/product-rail-gallery";
+import { ClothingRailHero, useClothItems, type RailGarment } from "@/components/ui/product-rail-gallery";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -36,13 +36,15 @@ import { StarRating } from "@/components/star-rating";
 import { NotifyWhenBack } from "@/components/notify-when-back";
 import { toast } from "sonner";
 
-function ProductDetailContent({ slug }: { slug: string }) {
+function ProductDetailContent({ slug, initialProduct }: { slug: string; initialProduct?: Product | null }) {
   const storeConfig = useStore();
   const router = useRouter();
   const wishlist = useWishlist();
-  const [product, setProduct] = useState<Product | null>(null);
+  // The server passes the product in, so the name, price and description are in the HTML that
+  // search engines and link previews read, and shoppers do not wait on a skeleton.
+  const [product, setProduct] = useState<Product | null>(initialProduct ?? null);
   const [related, setRelated] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialProduct);
   const { addItem, setProducts } = useCart();
 
   const [selectedImage, setSelectedImage] = useState(0);
@@ -51,9 +53,11 @@ function ProductDetailContent({ slug }: { slug: string }) {
   const [quantity, setQuantity] = useState(1);
   const [pincode, setPincode] = useState("");
   const [deliveryInfo, setDeliveryInfo] = useState<string | null>(null);
+  // Which choice the shopper still has to make, shown next to that picker (not only in a toast).
+  const [missingChoice, setMissingChoice] = useState<"size" | "color" | null>(null);
 
   useEffect(() => {
-    setLoading(true);
+    if (!initialProduct) setLoading(true);
     fetchProduct(slug).then(p => {
       setProduct(p);
       if (p) {
@@ -65,7 +69,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
       }
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [slug, setProducts]);
+  }, [slug, setProducts, initialProduct]);
 
   if (loading) {
     return (
@@ -109,15 +113,19 @@ function ProductDetailContent({ slug }: { slug: string }) {
   /** Puts the chosen variant in the bag. Returns false when a choice is missing. */
   const addChosen = (): boolean => {
     if (product.sizes.length > 0 && !size) {
-      toast.error("Please select a size");
+      setMissingChoice("size");
+      toast.error("Please choose a size");
       document.getElementById("size-picker")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.querySelector<HTMLButtonElement>("#size-picker button[aria-pressed]")?.focus({ preventScroll: true });
       return false;
     }
     if (product.colors.length > 0 && !activeColor) {
-      toast.error("Please select a color");
+      setMissingChoice("color");
+      toast.error("Please choose a colour");
       document.getElementById("color-picker")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return false;
     }
+    setMissingChoice(null);
     addItem(product.id, size || "Free Size", activeColor || product.colors[0]?.name || "", Math.min(quantity, maxQty));
     return true;
   };
@@ -175,6 +183,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
       name: p.name,
       description: p.brand_name ? `${p.brand_name} · ${formatPrice(p.sale_price ?? p.price)}` : formatPrice(p.sale_price ?? p.price),
       image: p.images[0],
+      altImages: p.images.slice(1, 3),
       cutout: p.image_cutout ?? undefined,
       tag: formatPrice(p.sale_price ?? p.price),
       href: `/products/${p.id}`,
@@ -244,7 +253,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
         <div className="space-y-6">
           <div>
             {product.brand_name && (
-              <Link href={`/brands/${product.brand_slug}`} className="text-sm font-medium uppercase tracking-wider text-sage hover:underline">
+              <Link href={`/brands/${product.brand_slug}`} className="text-sm font-medium uppercase tracking-wider text-sage-ink hover:underline">
                 {product.brand_name}
               </Link>
             )}
@@ -270,7 +279,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
             {hasDiscount && (
               <>
                 <span className="text-lg text-muted-foreground line-through">{formatPrice(product.price)}</span>
-                <Badge variant="secondary" className="text-sage">
+                <Badge variant="secondary" className="text-sage-ink">
                   {percentOff}% off · You save {formatPrice(savingsPerUnit(product))}
                 </Badge>
               </>
@@ -288,7 +297,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
 
           {product.colors.length > 0 && (
             <div id="color-picker">
-              <h3 className="mb-3 text-sm font-semibold">Color</h3>
+              <h2 className="mb-3 text-sm font-semibold">Color</h2>
               <div className="flex gap-2.5">
                 {product.colors.map((color) => (
                   <button
@@ -316,14 +325,17 @@ function ProductDetailContent({ slug }: { slug: string }) {
           {product.sizes.length > 0 && (
             <div id="size-picker">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Size</h3>
+                <h2 className="text-sm font-semibold">Size</h2>
                 <SizeGuide whatsappLink={storeConfig.confirmed.whatsapp ? storeConfig.whatsappLink : null} />
               </div>
               <div className="flex flex-wrap gap-2">
                 {product.sizes.map((option) => (
                   <button
                     key={option}
-                    onClick={() => setSelectedSize(option)}
+                    onClick={() => {
+                      setSelectedSize(option);
+                      if (missingChoice === "size") setMissingChoice(null);
+                    }}
                     aria-pressed={size === option}
                     className={`min-h-11 min-w-[3.5rem] rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
                       size === option
@@ -333,11 +345,16 @@ function ProductDetailContent({ slug }: { slug: string }) {
                   >{option}</button>
                 ))}
               </div>
+              {missingChoice === "size" ? (
+                <p role="alert" className="mt-2 text-sm font-medium text-destructive">
+                  Choose a size to add this to your bag.
+                </p>
+              ) : null}
             </div>
           )}
 
           <div>
-            <h3 className="mb-3 text-sm font-semibold">Quantity</h3>
+            <h2 className="mb-3 text-sm font-semibold">Quantity</h2>
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
@@ -379,7 +396,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
                 aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
                 aria-pressed={saved}
               >
-                <Heart className={`h-5 w-5 ${saved ? "fill-rose text-rose" : ""}`} />
+                <Heart className={`h-5 w-5 ${saved ? "fill-rose text-rose-ink" : ""}`} />
               </Button>
             </div>
           ) : (
@@ -393,7 +410,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
                   aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
                   aria-pressed={saved}
                 >
-                  <Heart className={`h-5 w-5 ${saved ? "fill-rose text-rose" : ""}`} />
+                  <Heart className={`h-5 w-5 ${saved ? "fill-rose text-rose-ink" : ""}`} />
                 </Button>
               </div>
               <NotifyWhenBack productId={product.id} />
@@ -408,10 +425,13 @@ function ProductDetailContent({ slug }: { slug: string }) {
           </p>
 
           <div className="rounded-lg border border-border p-4">
-            <h3 className="mb-3 text-sm font-semibold">Check Delivery</h3>
+            <h2 className="mb-3 text-sm font-semibold">Check Delivery</h2>
             <div className="flex gap-2">
               <Input
                 placeholder="Enter pincode"
+                aria-label="Delivery pincode"
+                inputMode="numeric"
+                autoComplete="postal-code"
                 value={pincode}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className="max-w-[200px]"
@@ -419,7 +439,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
               <Button variant="outline" onClick={checkDelivery}>Check</Button>
             </div>
             {deliveryInfo && (
-              <p className="mt-3 flex items-center gap-2 text-sm text-sage">
+              <p className="mt-3 flex items-center gap-2 text-sm text-sage-ink" role="status">
                 <Check className="h-4 w-4" /> {deliveryInfo}
               </p>
             )}
@@ -434,7 +454,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 rounded-lg border border-border p-3 text-sm font-medium transition-colors hover:bg-muted/50"
             >
-              <MessageCircle className="h-4 w-4 text-sage" />
+              <MessageCircle className="h-4 w-4 text-sage-ink" />
               Have a question? Ask us on WhatsApp
             </a>
           )}
@@ -466,22 +486,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
 
       <ProductReviews productId={product.id} />
 
-      {related.length > 0 && (
-        <section className="mt-16">
-          <ClothingRailHero
-            hanger="wood"
-            eyebrow="From the same rail"
-            heading="You may also like"
-            caption="Move along the rail, or open a piece to shop it."
-            items={railItems}
-            action={
-              <Button asChild variant="outline">
-                <Link href="/products">Shop all pieces</Link>
-              </Button>
-            }
-          />
-        </section>
-      )}
+      {related.length > 0 && <RelatedRail items={railItems} />}
 
       <RecentlyViewed excludeIds={[product.id]} />
 
@@ -494,7 +499,7 @@ function ProductDetailContent({ slug }: { slug: string }) {
               <p className="text-base font-semibold">
                 {formatPrice(displayPrice)}
                 {percentOff > 0 && (
-                  <span className="ml-2 text-xs font-medium text-sage">{percentOff}% off</span>
+                  <span className="ml-2 text-xs font-medium text-sage-ink">{percentOff}% off</span>
                 )}
               </p>
             </div>
@@ -509,12 +514,34 @@ function ProductDetailContent({ slug }: { slug: string }) {
   );
 }
 
-export function ProductDetailView({ slug }: { slug: string }) {
+/** "You may also like", hung as cloth: pieces whose photos will not separate are left off. */
+function RelatedRail({ items }: { items: RailGarment[] }) {
+  const cloth = useClothItems(items, 4, 2);
+  if (!cloth.ready || cloth.items.length === 0) return null;
+  return (
+    <section className="mt-16">
+      <ClothingRailHero
+        hanger="wood"
+        eyebrow="From the same rail"
+        heading="You may also like"
+        caption="Move along the rail, or open a piece to shop it."
+        items={cloth.items}
+        action={
+          <Button asChild variant="outline">
+            <Link href="/products">Shop all pieces</Link>
+          </Button>
+        }
+      />
+    </section>
+  );
+}
+
+export function ProductDetailView({ slug, initialProduct }: { slug: string; initialProduct?: Product | null }) {
   return (
     <div className="min-h-screen">
       <Header />
-      <main>
-        <ProductDetailContent slug={slug} />
+      <main id="main">
+        <ProductDetailContent slug={slug} initialProduct={initialProduct} />
       </main>
       <Footer />
     </div>

@@ -1064,45 +1064,45 @@ function CheckoutContent() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="fullName">Full Name *</Label>
-                    <Input id="fullName" value={address.fullName}
+                    <Input id="fullName" name="name" autoComplete="name" aria-required="true" value={address.fullName}
                       onChange={(e) => setAddress({ ...address, fullName: e.target.value })}
                       placeholder="Enter your full name" className="mt-1" />
                   </div>
                   <div>
                     <Label htmlFor="phone">Phone Number *</Label>
-                    <Input id="phone" value={address.phone}
+                    <Input id="phone" name="tel" type="tel" inputMode="numeric" autoComplete="tel-national" aria-required="true" value={address.phone}
                       onChange={(e) => setAddress({ ...address, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
                       placeholder="10-digit mobile number" className="mt-1" />
                   </div>
                 </div>
                 <div>
                   <Label htmlFor="email">Email (optional)</Label>
-                  <Input id="email" type="email" value={address.email}
+                  <Input id="email" name="email" type="email" autoComplete="email" value={address.email}
                     onChange={(e) => setAddress({ ...address, email: e.target.value })}
                     placeholder="your@email.com" className="mt-1" />
                 </div>
                 <div>
                   <Label htmlFor="address">Address *</Label>
-                  <Input id="address" value={address.address}
+                  <Input id="address" name="street-address" autoComplete="street-address" aria-required="true" value={address.address}
                     onChange={(e) => setAddress({ ...address, address: e.target.value })}
                     placeholder="House no., Building, Street, Area" className="mt-1" />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
                     <Label htmlFor="city">City *</Label>
-                    <Input id="city" value={address.city}
+                    <Input id="city" name="city" autoComplete="address-level2" aria-required="true" value={address.city}
                       onChange={(e) => setAddress({ ...address, city: e.target.value })}
                       placeholder="City" className="mt-1" />
                   </div>
                   <div>
                     <Label htmlFor="state">State *</Label>
-                    <Input id="state" value={address.state}
+                    <Input id="state" name="state" autoComplete="address-level1" aria-required="true" value={address.state}
                       onChange={(e) => setAddress({ ...address, state: e.target.value })}
                       placeholder="State" className="mt-1" />
                   </div>
                   <div>
                     <Label htmlFor="pincode">Pincode *</Label>
-                    <Input id="pincode" value={address.pincode}
+                    <Input id="pincode" name="postal-code" inputMode="numeric" autoComplete="postal-code" aria-required="true" value={address.pincode}
                       onChange={(e) => setAddress({ ...address, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
                       placeholder="6-digit pincode" className="mt-1" />
                   </div>
@@ -1139,7 +1139,7 @@ function CheckoutContent() {
                   <h2 className="font-serif text-lg font-medium">Payment Method</h2>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3" role="radiogroup" aria-label="Payment method">
                   <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
                     paymentMethod === "cod" ? "border-primary bg-primary/5" : "border-border"
                   }`}>
@@ -1262,6 +1262,8 @@ function CheckoutContent() {
                       }
                     }}
                     placeholder="Coupon code"
+                    aria-label="Coupon code"
+                    autoComplete="off"
                     className="h-10 font-mono uppercase"
                   />
                   <Button
@@ -1284,7 +1286,7 @@ function CheckoutContent() {
                   <span>{formatPrice(cartTotal)}</span>
                 </div>
                 {totals.discount > 0 ? (
-                  <div className="flex justify-between text-sage">
+                  <div className="flex justify-between text-sage-ink">
                     <span>Discount</span>
                     <span>−{formatPrice(totals.discount)}</span>
                   </div>
@@ -1296,7 +1298,7 @@ function CheckoutContent() {
                       ? ` (about ${deliveryQuote.distanceKm} km)`
                       : ""}
                   </span>
-                  <span>{shipping === 0 ? <span className="text-sage">FREE</span> : formatPrice(shipping)}</span>
+                  <span>{shipping === 0 ? <span className="text-sage-ink">FREE</span> : formatPrice(shipping)}</span>
                 </div>
                 {distancePricing && quotedFee === null && shipping > 0 ? (
                   <p className="text-xs text-muted-foreground">
@@ -1334,7 +1336,7 @@ export default function CheckoutPage() {
     <>
       <div className="min-h-screen">
         <Header />
-        <main>
+        <main id="main">
           <CheckoutContent />
         </main>
         <Footer />

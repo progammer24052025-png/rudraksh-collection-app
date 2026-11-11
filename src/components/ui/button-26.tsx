@@ -81,7 +81,7 @@ const CouponRevealButton = React.forwardRef<HTMLButtonElement, CouponRevealButto
           className={cn(
             "absolute inset-0 flex items-center justify-center rounded-lg border-2 border-dashed transition-colors duration-300",
             copied
-              ? "border-sage bg-sage/10 text-sage"
+              ? "border-sage bg-sage/10 text-sage-ink"
               : "border-primary bg-primary/5 text-foreground",
             "shadow-[inset_0_2px_4px_rgba(0,0,0,0.04)]",
           )}

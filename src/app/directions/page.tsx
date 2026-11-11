@@ -48,7 +48,7 @@ export default function DirectionsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main">
         {/* Breadcrumb & Hero */}
         <section className="bg-cream/50 border-b border-border py-10 sm:py-14">
           <div className="mx-auto max-w-5xl px-4 sm:px-6">

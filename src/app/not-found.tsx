@@ -7,7 +7,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center sm:px-6">
+      <main id="main" className="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center sm:px-6">
         <p className="font-serif text-6xl font-medium text-primary/30">404</p>
         <h1 className="mt-4 font-serif text-3xl font-medium">We couldn&apos;t find that page</h1>
         <p className="mt-3 text-muted-foreground">

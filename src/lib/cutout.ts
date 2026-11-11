@@ -10,6 +10,8 @@
  * result is a transparent WebP data URL (or PNG where WebP cannot be encoded).
  */
 
+import { isOptimizableImage } from "./image-hosts";
+
 export type CutoutBounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 export type CutoutResult = { url: string; width: number; height: number };
@@ -351,6 +353,12 @@ export function cutoutPixels(
   if (edgesTouched(data, width, height) >= 3) return null;
   const opaque = opaqueBounds(data, width, height);
   if (!opaque.bounds || opaque.kept / mask.total < 0.02) return null;
+  // A garment fills a good share of its own bounding box (a shirt with sleeves out
+  // is still ~0.5). A result far below that is the fill tearing through a piece the
+  // same tone as its backdrop — white on white — and leaving scraps. Hanging those
+  // scraps looks worse than the plain photo, so give up instead.
+  const box = (opaque.bounds.maxX - opaque.bounds.minX + 1) * (opaque.bounds.maxY - opaque.bounds.minY + 1);
+  if (opaque.kept / box < 0.3) return null;
   return { ...mask, bounds: opaque.bounds, kept: opaque.kept };
 }
 
@@ -364,6 +372,24 @@ export function isSameOrigin(src: string) {
   } catch {
     return false;
   }
+}
+
+/**
+ * A URL for `src` whose pixels the browser is allowed to read.
+ *
+ * Product photos live on other hosts (Unsplash, Firebase Storage), and a canvas
+ * cannot read a cross-origin image without CORS headers. Our own image optimizer
+ * (`/_next/image`) serves those same photos from this origin, and it only accepts
+ * the hosts listed in `image-hosts.ts`, so this is not an open proxy. `w=1080` and
+ * `q=75` are values Next accepts by default.
+ */
+export function readableSource(src: string): string | null {
+  if (!src) return null;
+  if (isSameOrigin(src)) return src;
+  if (typeof window !== "undefined" && isOptimizableImage(src)) {
+    return `/_next/image?url=${encodeURIComponent(src)}&w=1080&q=75`;
+  }
+  return null;
 }
 
 const cache = new Map<string, Promise<CutoutResult | null>>();
@@ -432,12 +458,16 @@ export function cutoutFor(
   options: { force?: boolean; tolerance?: number; maxEdge?: number } = {},
 ) {
   if (!src) return Promise.resolve(null);
-  if (!options.force && !isSameOrigin(src)) return Promise.resolve(null);
+  // Same-origin or optimizer-proxied when possible; `force` also tries the host
+  // directly, which works when it sends CORS headers.
+  const readable = readableSource(src);
+  if (!readable && !options.force) return Promise.resolve(null);
+  const target = readable ?? src;
   const maxEdge = options.maxEdge ?? MAX_EDGE;
-  const key = `${src}|${options.tolerance ?? "auto"}|${maxEdge}`;
+  const key = `${target}|${options.tolerance ?? "auto"}|${maxEdge}`;
   const cached = cache.get(key);
   if (cached) return cached;
-  const job = render(src, maxEdge, options.tolerance).catch(() => null);
+  const job = render(target, maxEdge, options.tolerance).catch(() => null);
   cache.set(key, job);
   return job;
 }

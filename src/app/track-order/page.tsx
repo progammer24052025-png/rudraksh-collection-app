@@ -79,7 +79,7 @@ function TrackOrderInner() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <div className="text-center">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage">Order tracking</p>
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Order tracking</p>
         <h1 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Where is my order?</h1>
         <p className="mt-3 text-muted-foreground">
           Enter your order number and the last 4 digits (or full 10-digit mobile number) used at checkout.
@@ -209,7 +209,7 @@ export default function TrackOrderPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main>
+      <main id="main">
         <Suspense
           fallback={
             <div className="flex justify-center py-24">

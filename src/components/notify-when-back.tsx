@@ -93,7 +93,7 @@ export function NotifyWhenBack({ productId }: { productId: string }) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm">
         <span className="flex items-center gap-1.5">
-          <Check className="h-4 w-4 text-sage" /> We will email <strong>{email}</strong> when it is back.
+          <Check className="h-4 w-4 text-sage-ink" /> We will email <strong>{email}</strong> when it is back.
         </span>
         <button
           type="button"
