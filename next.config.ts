@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+import { imageHosts } from "./src/lib/image-hosts";
+
 // Local `next dev` runs against the Wrangler emulated bindings when they are
 // installed. Vercel builds and production builds skip this entirely: there is
 // no Cloudflare account, no wrangler and no local bindings there.
@@ -20,11 +22,10 @@ if (isDev && !onVercel) {
 const LOADER = path.resolve(__dirname, 'src/visual-edits/component-tagger-loader.js');
 
 /**
- * Images uploaded from the admin panel are compressed in the browser and stored
- * as files under `public/`, so they are served from our own origin and are not
- * affected by `remotePatterns` at all. Only pasted external URLs are — and those
- * must be https. Dropping `http` closes the plaintext-and-internal-address half
- * of the open image proxy without touching a single working image.
+ * The image optimizer only fetches from the hosts in `src/lib/image-hosts.ts`
+ * (extend with the `IMAGE_HOSTS` env var). A pasted URL on any other https host
+ * still displays — `StoreImage` serves it unoptimized — it just cannot use our
+ * optimizer as a free proxy.
  */
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -80,9 +81,10 @@ const nextConfig: NextConfig = {
     FIREBASE_DB_ROOT: process.env.FIREBASE_DB_ROOT || process.env.NEXT_PUBLIC_FIREBASE_DB_ROOT || "rudraksh",
     ADMIN_EMAIL: process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "",
     SITE_URL: process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "",
+    IMAGE_HOSTS: process.env.IMAGE_HOSTS || "",
   },
   images: {
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
+    remotePatterns: imageHosts.map((hostname) => ({ protocol: 'https' as const, hostname })),
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
@@ -95,7 +97,6 @@ const nextConfig: NextConfig = {
     ];
   },
   outputFileTracingRoot: path.resolve(__dirname),
-  typescript: { ignoreBuildErrors: true },
   turbopack: {
     rules: {
       "*.{jsx,tsx}": { loaders: [LOADER] },

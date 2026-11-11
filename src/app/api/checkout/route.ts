@@ -1,11 +1,12 @@
+import { isSecureCheckout } from "@/lib/server/rtdb-admin";
 import {
-  adminAdjustNumber,
-  adminGet,
-  adminPush,
-  adminSet,
-  adminUpdate,
-  isSecureCheckout,
-} from "@/lib/server/rtdb-admin";
+  claimPayment,
+  clearPendingCheckout,
+  recordOrder,
+  releasePayment,
+  waitForPaymentOrder,
+  type OrderCustomer,
+} from "@/lib/server/create-order";
 import {
   clientIp,
   crossOriginResponse,
@@ -14,7 +15,7 @@ import {
   tooManyRequestsResponse,
 } from "@/lib/server/http";
 import { callerFrom } from "@/lib/server/id-token";
-import { digits, orderNumber, priceCart, type CartRequest } from "@/lib/server/price-cart";
+import { digits, priceCart, type CartRequest } from "@/lib/server/price-cart";
 import {
   captureRazorpayPayment,
   fetchRazorpayPayment,
@@ -22,9 +23,10 @@ import {
   razorpayConfigured,
   verifyPaymentSignature,
 } from "@/lib/server/razorpay";
-import type { Order } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+// The order writer sends the confirmation email over `node:tls`.
+export const runtime = "nodejs";
 
 type PaymentProof = {
   razorpay_order_id?: string;
@@ -34,16 +36,6 @@ type PaymentProof = {
 
 type CheckoutBody = CartRequest & {
   payment_method?: "cod" | "razorpay";
-  notes?: string | null;
-  customer?: {
-    name?: string;
-    phone?: string;
-    email?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    pincode?: string;
-  };
   payment_proof?: PaymentProof;
 };
 
@@ -53,7 +45,7 @@ export async function POST(request: Request) {
   // An order costs a database write and, for COD, a fulfilment task. Six per
   // ten minutes is far more than a real customer needs and far less than a
   // script wants.
-  const gate = rateLimit(`checkout:${clientIp(request)}`, 6, 10 * 60 * 1000);
+  const gate = await rateLimit(`checkout:${clientIp(request)}`, 6, 10 * 60 * 1000);
   if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
 
   let body: CheckoutBody;
@@ -69,7 +61,7 @@ export async function POST(request: Request) {
   const caller = await callerFrom(request);
   const uid = caller?.uid ?? null;
 
-  const customer = body.customer ?? {};
+  const input = body.customer ?? {};
 
   // Checkout is signed-in only. The uid above is the token's, so the "please
   // sign in" rule cannot be satisfied by typing somebody else's id.
@@ -80,23 +72,33 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!customer.name?.trim() || digits(customer.phone ?? "").length < 10) {
+  if (!input.name?.trim() || digits(input.phone ?? "").length < 10) {
     return Response.json(
       { ok: false, error: "A name and a 10-digit phone are required." },
       { status: 400 },
     );
   }
-  if (!customer.address?.trim() || !customer.city?.trim() || !customer.state?.trim()) {
+  if (!input.address?.trim() || !input.city?.trim() || !input.state?.trim()) {
     return Response.json(
       { ok: false, error: "A complete delivery address is required." },
       { status: 400 },
     );
   }
-  if (digits(customer.pincode ?? "").length !== 6) {
+  if (digits(input.pincode ?? "").length !== 6) {
     return Response.json({ ok: false, error: "A 6-digit PIN code is required." }, { status: 400 });
   }
 
-  const priced = await priceCart(body);
+  const customer: OrderCustomer = {
+    name: input.name.trim(),
+    phone: digits(input.phone ?? ""),
+    email: input.email?.trim() || null,
+    address: input.address.trim(),
+    city: input.city.trim(),
+    state: input.state.trim(),
+    pincode: digits(input.pincode ?? ""),
+  };
+
+  const priced = await priceCart(body, uid);
   if (!priced.ok) {
     return Response.json(
       { ok: false, error: priced.error, totals: priced.totals },
@@ -112,6 +114,8 @@ export async function POST(request: Request) {
   // The order is only written once the gateway has confirmed that this exact
   // amount was paid. Any doubt means no order and no charge.
   let payment: { orderId: string; paymentId: string } | null = null;
+  let authorizedOnly = false;
+  const expectedPaise = Math.round(totals.total * 100);
 
   if (method === "razorpay") {
     if (!razorpayConfigured()) {
@@ -150,7 +154,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const expectedPaise = Math.round(totals.total * 100);
     if (
       gatewayPayment.order_id !== orderId ||
       gatewayPayment.amount !== expectedPaise ||
@@ -168,35 +171,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // A payment id may only ever produce one order — blocks a replayed proof.
-    try {
-      const used = await adminGet<{ order_number?: string }>(`payments/${paymentId}`);
-      if (used) {
-        return Response.json(
-          {
-            ok: false,
-            error: `This payment is already recorded${used.order_number ? ` as ${used.order_number}` : ""}.`,
-          },
-          { status: 409 },
-        );
-      }
-    } catch (error) {
-      console.error("Payment idempotency check failed:", error);
-      return Response.json(
-        { ok: false, error: "We could not confirm that payment. Please contact us before paying again." },
-        { status: 502 },
-      );
-    }
-
-    if (gatewayPayment.status === "authorized") {
-      // Account-level manual capture: settle now, but never block the order on it.
-      try {
-        await captureRazorpayPayment(paymentId, expectedPaise);
-      } catch (error) {
-        console.error("Razorpay capture failed (order still recorded):", error);
-      }
-    }
-
+    authorizedOnly = gatewayPayment.status === "authorized";
     payment = { orderId, paymentId };
   }
 
@@ -212,171 +187,129 @@ export async function POST(request: Request) {
     });
   }
 
-  // Claim one use of a limited coupon before writing the order, and give it back
-  // if the order never lands. Counting after the write would let two concurrent
-  // checkouts spend the last use twice.
-  let couponReserved = false;
-  if (appliedCoupon && couponKey) {
-    const maxUses = typeof appliedCoupon.max_uses === "number" ? appliedCoupon.max_uses : 0;
-    if (maxUses > 0) {
-      try {
-        const used = await adminAdjustNumber(`coupons/${couponKey}/used_count`, 1);
-        if (used !== null && used > maxUses) {
-          await adminAdjustNumber(`coupons/${couponKey}/used_count`, -1);
-          return Response.json(
-            { ok: false, error: "That code has just been fully redeemed.", totals },
-            { status: 409 },
-          );
+  // A payment id may only ever produce one order. The gateway webhook records
+  // the same payment, often before this request arrives, so losing the claim is
+  // normal: the order already exists (or is being written) and we report it.
+  if (payment) {
+    const paymentId = payment.paymentId;
+    const stillRecording = () =>
+      Response.json(
+        {
+          ok: false,
+          secure: true,
+          totals,
+          paid: true,
+          recording: true,
+          payment_id: paymentId,
+          error: `Your payment was received (${paymentId}) and your order is being recorded. Check My Orders in a minute — you will not be charged again.`,
+        },
+        { status: 409 },
+      );
+
+    let claim;
+    try {
+      claim = await claimPayment(paymentId, { uid, razorpayOrderId: payment.orderId });
+    } catch (error) {
+      console.error("Payment claim failed:", error);
+      return Response.json(
+        { ok: false, error: "We could not confirm that payment. Please contact us before paying again." },
+        { status: 502 },
+      );
+    }
+
+    if (!claim.claimed) {
+      let record = claim.record;
+      if (!record?.order_number) {
+        try {
+          record = await waitForPaymentOrder(paymentId);
+        } catch {
+          record = null;
         }
-        couponReserved = used !== null;
+      }
+      if (record?.uid && record.uid !== uid) {
+        return Response.json(
+          { ok: false, error: "This payment belongs to a different account." },
+          { status: 409 },
+        );
+      }
+      if (!record?.order_number || !record.order_id) return stillRecording();
+      return Response.json({
+        ok: true,
+        secure: true,
+        totals,
+        order: { id: record.order_id, order_number: record.order_number },
+        payment: { id: paymentId, status: "paid" as const },
+      });
+    }
+
+    if (authorizedOnly) {
+      // Account-level manual capture: settle now, but never block the order on it.
+      try {
+        await captureRazorpayPayment(paymentId, expectedPaise);
       } catch (error) {
-        console.error("Coupon reservation failed:", error);
+        console.error("Razorpay capture failed (order still recorded):", error);
       }
     }
   }
 
-  const now = new Date();
-  const iso = now.toISOString();
-  const history = [
-    { status: "placed" as const, at: iso },
-    ...(payment ? [{ status: "confirmed" as const, at: iso }] : []),
-  ];
-
-  const order: Omit<Order, "id"> = {
-    order_number: orderNumber(now),
-    user_id: uid,
-    customer_name: customer.name.trim(),
-    phone: digits(customer.phone ?? ""),
-    email: customer.email?.trim() || null,
-    address: customer.address.trim(),
-    city: customer.city.trim(),
-    state: customer.state.trim(),
-    pincode: digits(customer.pincode ?? ""),
-    items: orderItems,
-    subtotal: totals.subtotal,
-    discount: totals.discount,
-    taxable_base: totals.taxableBase,
-    tax: totals.tax,
-    tax_rate: config.tax.enabled ? config.tax.rate : 0,
-    coupon_code: totals.couponCode,
-    shipping: totals.shipping,
-    total: totals.total,
-    payment_method: method,
-    payment_status: payment ? "paid" : "pending",
-    order_status: payment ? "confirmed" : "placed",
-    razorpay_order_id: payment?.orderId ?? null,
-    razorpay_payment_id: payment?.paymentId ?? null,
-    notes: body.notes?.trim() || null,
-    status_history: history,
-    created_at: iso,
-    updated_at: iso,
-  };
-
   try {
-    const orderId = await adminPush("orders", order);
-
-    await adminSet(`ordersByUser/${uid ?? "guest"}/${orderId}`, {
-      order_number: order.order_number,
+    const result = await recordOrder({
+      uid,
+      customer,
+      orderItems,
+      totals,
+      taxRate: config.tax.enabled ? config.tax.rate : 0,
+      method,
+      payment,
+      notes: body.notes?.trim() || null,
+      coupon: appliedCoupon
+        ? {
+            code: appliedCoupon.code,
+            key: couponKey,
+            maxUses: typeof appliedCoupon.max_uses === "number" ? appliedCoupon.max_uses : 0,
+          }
+        : null,
     });
-    await adminSet(`tracking/${order.order_number}`, {
-      order_number: order.order_number,
-      order_status: order.order_status,
-      payment_status: order.payment_status,
-      status_history: history,
-      phone_last4: order.phone.slice(-4),
-      total: order.total,
-      created_at: iso,
-      updated_at: iso,
-    });
 
-    // Recorded after the order exists so a failed write leaves the proof unused
-    // and the customer's payment can be matched by hand.
-    if (payment) {
-      await adminSet(`payments/${payment.paymentId}`, {
-        order_id: orderId,
-        order_number: order.order_number,
-        razorpay_order_id: payment.orderId,
-        amount: order.total,
-        at: iso,
-      });
-    }
-
-    // One redemption per user and per phone, keyed by the verified uid. The
-    // coupon's own used_count is handled above by the atomic reservation, so it
-    // is deliberately not incremented a second time here.
-    if (appliedCoupon) {
-      const phone10 = digits(customer.phone ?? "").slice(-10);
-      const record = {
-        order_id: orderId,
-        order_number: order.order_number,
-        user_id: uid,
-        phone: phone10,
-        used_at: iso,
-      };
-      await adminSet(`couponRedemptions/${appliedCoupon.code}/${uid}`, record);
-      await adminSet(`userCoupons/${uid}/${appliedCoupon.code}`, record);
-      if (phone10.length === 10) {
-        await adminSet(`couponRedemptionsByPhone/${appliedCoupon.code}/${phone10}`, record);
+    if (!result.ok) {
+      if (payment) {
+        // Paid, but the coupon ran out between pricing and now. Release the
+        // claim so the gateway webhook can still record the paid order.
+        await releasePayment(payment.paymentId);
+        return Response.json(
+          {
+            ok: false,
+            secure: true,
+            totals,
+            paid: true,
+            payment_id: payment.paymentId,
+            error: `Your payment was received (${payment.paymentId}) but the coupon was fully redeemed while you paid. Please contact us with this reference — you will not be charged again.`,
+          },
+          { status: 409 },
+        );
       }
+      return Response.json(
+        { ok: false, error: "That code has just been fully redeemed.", totals },
+        { status: 409 },
+      );
     }
 
-    // Take the stock out now that the order exists. A line whose product has no
-    // numeric stock is left alone (unlimited), and a failed adjustment never
-    // fails the order — the customer has already paid or committed to pay.
-    let stockTaken = false;
-    for (const line of orderItems) {
-      if (!line.productId) continue;
-      try {
-        const left = await adminAdjustNumber(`products/${line.productId}/stock`, -line.quantity);
-        if (left !== null) stockTaken = true;
-      } catch (error) {
-        console.warn("Stock adjustment failed:", line.productId, error);
-      }
-    }
-    if (stockTaken) {
-      // Only orders that actually moved stock may put it back on cancellation.
-      await adminUpdate(`orders/${orderId}`, { stock_decremented: true });
-    }
-
-    // Unlimited coupons were already incremented above only when limited.
-    if (couponKey && !couponReserved) {
-      try {
-        await adminAdjustNumber(`coupons/${couponKey}/used_count`, 1);
-      } catch (error) {
-        console.warn("Coupon usage increment failed:", couponKey, error);
-      }
-    }
-
-    if (uid) {
-      await adminPush(`activity/${uid}`, {
-        type: "order",
-        label: `Order ${order.order_number} placed`,
-        meta: `₹${order.total.toLocaleString("en-IN")}`,
-        href: "/track-order",
-        at: iso,
-      });
-    }
+    if (payment) await clearPendingCheckout(payment.orderId);
 
     return Response.json({
       ok: true,
       secure: true,
       totals,
-      order: { id: orderId, order_number: order.order_number },
+      order: { id: result.orderId, order_number: result.orderNumber },
       payment: payment ? { id: payment.paymentId, status: "paid" as const } : null,
     });
   } catch (error) {
     console.error("Secure checkout failed:", error);
-    // The order did not land, so the coupon use we claimed must go back.
-    if (couponReserved && couponKey) {
-      try {
-        await adminAdjustNumber(`coupons/${couponKey}/used_count`, -1);
-      } catch {
-        /* the counter can be corrected by hand from the coupon screen */
-      }
-    }
     if (payment) {
-      // Money has moved but the order does not exist yet: surface the payment id
-      // so the customer can quote it and we can reconcile instead of re-charging.
+      // Money has moved but the order does not exist yet. Release the claim so
+      // the gateway webhook can record it, and surface the payment id so the
+      // customer can quote it instead of paying again.
+      await releasePayment(payment.paymentId);
       return Response.json(
         {
           ok: false,

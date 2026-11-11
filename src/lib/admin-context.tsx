@@ -6,7 +6,8 @@
 //
 // Nobody becomes an admin just by signing up. The owner email can bootstrap
 // the first account, but only once its address is verified; every other
-// account has to request access and be approved from Admin → Team.
+// account has to request access and be approved from Admin → Team. `isAdmin`
+// is true only while the admin record actually exists.
 
 import {
   createContext,
@@ -75,28 +76,41 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const decidedFor = useRef<string | null>(null);
 
   const evaluateAccess = useCallback(async (firebaseUser: User) => {
-    const email = (firebaseUser.email ?? "").toLowerCase();
-
-    // Configured owner/admin emails can immediately bootstrap or claim owner status
-    if (isAllowedAdminEmail(email)) {
-      setNeedsVerification(false);
-      setPending(false);
-      setIsAdmin(true);
+    // The verified flag is cached with the session; refresh it so a link the
+    // user has just clicked counts without signing out and in again.
+    if (!firebaseUser.emailVerified) {
       try {
-        await grantAdmin(firebaseUser.uid, email, "owner");
-      } catch (err) {
-        console.warn("Could not write admin record:", err);
+        await firebaseUser.reload();
+        if (firebaseUser.emailVerified) await firebaseUser.getIdToken(true);
+      } catch {
+        /* offline — fall through with what we have */
       }
-      return;
     }
 
-    // Unverified password accounts cannot be trusted to claim anything.
+    const email = (firebaseUser.email ?? "").toLowerCase();
+
+    // Nobody is trusted with an address they have not proved they own — the
+    // owner address included, since it is public. The database rules enforce
+    // the same thing; this keeps the screen honest about it.
     if (usesPasswordProvider(firebaseUser) && !firebaseUser.emailVerified) {
       setNeedsVerification(true);
       setPending(false);
       return;
     }
     setNeedsVerification(false);
+
+    // A verified owner address may claim the first admin record. The panel only
+    // unlocks once that record exists (see the live subscription below), so a
+    // refused write never shows an admin screen that cannot save anything.
+    if (isAllowedAdminEmail(email) && firebaseUser.emailVerified) {
+      try {
+        await grantAdmin(firebaseUser.uid, email, "owner");
+        setPending(false);
+        return;
+      } catch (err) {
+        console.warn("Owner record was not written; requesting access instead:", err);
+      }
+    }
 
     try {
       await requestAdminAccess(firebaseUser);
@@ -159,22 +173,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, evaluateAccess]);
 
+  // Signing in only establishes who the caller is. Whether they are an admin is
+  // decided by `evaluateAccess` and the live admin record, never assumed here.
   const signIn = useCallback(
     async (email: string, password: string): Promise<boolean> => {
       setError(null);
       const normalized = email.trim().toLowerCase();
       try {
-        const firebaseUser = await signInWithEmailAccount(normalized, password);
-        if (isAllowedAdminEmail(normalized)) {
-          setIsAdmin(true);
-          setNeedsVerification(false);
-          setPending(false);
-          try {
-            await grantAdmin(firebaseUser.uid, normalized, "owner");
-          } catch {
-            /* admin record may already exist */
-          }
-        }
+        await signInWithEmailAccount(normalized, password);
         return true;
       } catch (err) {
         const code = (err as { code?: string }).code ?? "";
@@ -188,16 +194,16 @@ export function AdminProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
-        // First-run setup for the owner/admin address:
+        // First-run setup for the owner address: create the account, then make
+        // them prove the address before anything is unlocked.
         try {
           const credential = await createEmailAccount(normalized, password);
-          setIsAdmin(true);
-          setNeedsVerification(false);
+          setNeedsVerification(true);
           setPending(false);
           try {
-            await grantAdmin(credential.user.uid, normalized, "owner");
+            await sendVerificationFor(credential.user);
           } catch {
-            /* admin record may already exist */
+            /* the "resend" button covers a failed first send */
           }
           return true;
         } catch (createError) {
@@ -212,17 +218,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (): Promise<boolean> => {
     setError(null);
     try {
-      const googleUser = await signInWithGoogleAccount();
-      if (googleUser && isAllowedAdminEmail(googleUser.email)) {
-        setIsAdmin(true);
-        setNeedsVerification(false);
-        setPending(false);
-        try {
-          await grantAdmin(googleUser.uid, googleUser.email ?? "", "owner");
-        } catch {
-          /* ignore */
-        }
-      }
+      await signInWithGoogleAccount();
       return true;
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";

@@ -50,10 +50,9 @@ export default function AdminLoginPage() {
     setSubmitting(true);
     const ok = await signIn(email, password);
     setSubmitting(false);
-    if (ok) {
-      toast.success("Signed in");
-      router.replace("/admin/dashboard");
-    }
+    // The effect above opens the dashboard once the admin record is confirmed;
+    // an unverified or unapproved account stays here and is told why.
+    if (ok) toast.success("Signed in");
   };
 
   if (loading) {
@@ -193,10 +192,7 @@ export default function AdminLoginPage() {
               setSubmitting(true);
               const ok = await signInWithGoogle();
               setSubmitting(false);
-              if (ok) {
-                toast.success("Signed in");
-                router.replace("/admin/dashboard");
-              }
+              if (ok) toast.success("Signed in");
             }}
           >
             <svg viewBox="0 0 24 24" className="mr-2 h-4 w-4">

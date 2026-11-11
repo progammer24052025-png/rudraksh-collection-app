@@ -193,6 +193,7 @@ export async function adminAdjustNumber(
   path: string,
   delta: number,
   attempts = 3,
+  options: { createIfMissing?: boolean } = {},
 ): Promise<number | null> {
   const account = readServiceAccount();
   if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
@@ -208,7 +209,11 @@ export async function adminAdjustNumber(
 
     const etag = read.headers.get("etag");
     const raw = (await read.json()) as number | string | null;
-    const current = typeof raw === "number" ? raw : Number(raw);
+    // An unset leaf means "no limit" for stock, so it is left alone unless the
+    // caller is keeping a counter (`createIfMissing`). `Number(null)` is 0, so
+    // without this guard an unlimited product would be written as sold out.
+    if (raw === null && !options.createIfMissing) return null;
+    const current = raw === null ? 0 : typeof raw === "number" ? raw : Number(raw);
     if (!Number.isFinite(current)) return null;
 
     const next = Math.max(0, current + delta);
@@ -246,4 +251,42 @@ export async function adminUpdate(path: string, value: Record<string, unknown>):
   if (!response.ok) {
     throw new Error(`RTDB update failed (${response.status}): ${(await response.text()).slice(0, 200)}`);
   }
+}
+
+/**
+ * Writes `value` only when nothing is stored at `path` yet. Returns false when
+ * somebody else got there first. Guarded by the node's ETag, so two requests
+ * racing for the same key cannot both win — this is what makes "one payment,
+ * one order" hold when the browser and the gateway webhook arrive together.
+ */
+export async function adminCreateIfAbsent(path: string, value: unknown): Promise<boolean> {
+  const account = readServiceAccount();
+  if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
+  const token = await accessToken(account);
+  const url = `${urlFor(account, path)}?access_token=${encodeURIComponent(token)}`;
+
+  const read = await fetch(url, { headers: { "X-Firebase-ETag": "true" }, cache: "no-store" });
+  if (!read.ok) throw new Error(`RTDB read failed (${read.status})`);
+  if ((await read.json()) !== null) return false;
+
+  const etag = read.headers.get("etag");
+  if (!etag) throw new Error("RTDB did not return an ETag");
+  const write = await fetch(url, {
+    method: "PUT",
+    headers: { "content-type": "application/json", "if-match": etag },
+    body: JSON.stringify(value),
+  });
+  if (write.ok) return true;
+  if (write.status === 412) return false;
+  throw new Error(`RTDB write failed (${write.status}): ${(await write.text()).slice(0, 200)}`);
+}
+
+export async function adminDelete(path: string): Promise<void> {
+  const account = readServiceAccount();
+  if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
+  const token = await accessToken(account);
+  const response = await fetch(`${urlFor(account, path)}?access_token=${encodeURIComponent(token)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error(`RTDB delete failed (${response.status})`);
 }

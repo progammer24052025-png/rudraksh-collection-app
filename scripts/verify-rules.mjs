@@ -31,6 +31,11 @@ const checks = [
   ["activity", "deny", "per-user only"],
   ["admins", "deny", "admin roster is admin only"],
   ["tracking", "deny", "must not be listable — order numbers would leak"],
+  ["couponRedemptions", "deny", "holds customer phone numbers"],
+  ["couponRedemptionsByPhone", "deny", "keys are customer phone numbers"],
+  ["payments", "deny", "server only"],
+  ["pendingPayments", "deny", "server only — holds delivery addresses"],
+  ["rateLimits", "deny", "server only"],
 ];
 
 if (keyArg) {

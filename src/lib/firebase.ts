@@ -470,6 +470,39 @@ export const subscribeUserOrders = (uid: string, callback: (orders: Order[]) => 
 export const subscribeOrder = (orderId: string, callback: (order: Order | null) => void) =>
   subscribeValue<Order>(["orders", orderId], callback);
 
+/**
+ * Loads one order by its order number for the signed-in caller.
+ *
+ * Customers may only read their own orders, so theirs is found through the
+ * `ordersByUser` index and then read by id. Listing `/orders` is admin-only;
+ * the indexed query below is the admin path and is simply refused for anyone
+ * else.
+ */
+export async function findOrderByNumber(uid: string, orderNumber: string): Promise<Order | null> {
+  const key = orderNumber.trim().toUpperCase();
+  if (!uid || !key) return null;
+
+  try {
+    const index = await readValue<Record<string, { order_number?: string }>>(["ordersByUser", uid]);
+    const own = Object.entries(index ?? {}).find(
+      ([, entry]) => (entry?.order_number || "").toUpperCase() === key,
+    );
+    if (own) {
+      const order = await readValue<Order>(["orders", own[0]]);
+      if (order) return { ...order, id: order.id || own[0] } as Order;
+    }
+  } catch {
+    /* fall through to the admin lookup */
+  }
+
+  try {
+    const snapshot = await get(query(rtdbRef("orders"), orderByChild("order_number"), equalTo(key)));
+    return toList<Order>(snapshot.val() as EntityMap<Order> | null)[0] ?? null;
+  } catch {
+    return null; // not an admin
+  }
+}
+
 // Same alphabet and length as the server generator: the number is also the
 // guest tracking secret, so it must come from the CSPRNG, not Math.random.
 const ORDER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -568,6 +601,9 @@ export async function placeOrder(input: NewOrderInput): Promise<Order> {
     razorpay_payment_id: input.razorpay_payment_id ?? null,
     order_status: input.order_status || "placed",
     notes: input.notes ?? null,
+    // Required by the database rules for any order a browser writes, and shown
+    // to staff: these totals were not written by the server.
+    client_written: true,
     status_history: history,
     created_at: now,
     updated_at: now,
@@ -827,11 +863,17 @@ export async function checkUserCouponUsed(
   // Check 2: by normalized 10-digit phone
   const phoneDigits = (phone ?? "").replace(/\D/g, "").slice(-10);
   if (phoneDigits.length === 10) {
-    const phoneRedemption = await readValue<{ order_number?: string }>([
-      "couponRedemptionsByPhone",
-      cleanCode,
-      phoneDigits,
-    ]);
+    // The rules only let a customer read a phone record that is missing or
+    // their own, so "permission denied" here means another account already
+    // redeemed the code for this number.
+    let phoneRedemption: { order_number?: string } | null | true = null;
+    try {
+      // `readValue` swallows errors, so the denial has to be caught here.
+      const snapshot = await get(rtdbRef("couponRedemptionsByPhone", cleanCode, phoneDigits));
+      phoneRedemption = (snapshot.val() as { order_number?: string } | null) ?? null;
+    } catch {
+      phoneRedemption = true;
+    }
     if (phoneRedemption) {
       return {
         used: true,

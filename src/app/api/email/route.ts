@@ -140,7 +140,7 @@ export async function GET(request: Request) {
     return json({ ok: true, configured, sender: mailSender() });
   }
 
-  const gate = rateLimit(`email:${clientIp(request)}`, 12, WINDOW_MS);
+  const gate = await rateLimit(`email:${clientIp(request)}`, 12, WINDOW_MS);
   if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
   const result = await verifySmtp();
   return json(
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "This request came from another site." }, 403);
   }
 
-  const gate = rateLimit(`email:${clientIp(request)}`, 12, WINDOW_MS);
+  const gate = await rateLimit(`email:${clientIp(request)}`, 12, WINDOW_MS);
   if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;

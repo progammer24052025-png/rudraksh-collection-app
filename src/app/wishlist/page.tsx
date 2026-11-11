@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/store-image";
 import { Heart, Trash2, ShoppingBag } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";

@@ -8,49 +8,65 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { TaxInvoice, type InvoiceData } from "@/components/kit/tax-invoice";
-import { readValue } from "@/lib/firebase";
+import { findOrderByNumber } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
 import type { Order } from "@/lib/types";
 
 function InvoiceContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get("order")?.trim().toUpperCase();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<Order | null>(null);
+  const uid = user?.uid ?? null;
 
   useEffect(() => {
-    if (!orderNumber) {
+    // Orders are private, so wait until we know who is asking.
+    if (authLoading) return;
+    if (!orderNumber || !uid) {
+      setOrder(null);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    async function load() {
-      try {
-        // Query orders index or orders
-        const allOrders = await readValue<Record<string, Order>>(["orders"]);
-        if (allOrders && !cancelled) {
-          const match = Object.values(allOrders).find(
-            (o) => o && o.order_number?.toUpperCase() === orderNumber,
-          );
-          if (match) setOrder(match);
-        }
-      } catch (err) {
-        console.error("Failed to load invoice:", err);
-      } finally {
+    setLoading(true);
+    findOrderByNumber(uid, orderNumber)
+      .then((found) => {
+        if (!cancelled) setOrder(found);
+      })
+      .catch((err) => console.error("Failed to load invoice:", err))
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    }
-    load();
+      });
     return () => {
       cancelled = true;
     };
-  }, [orderNumber]);
+  }, [authLoading, orderNumber, uid]);
 
   if (loading) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="mt-3 text-sm text-muted-foreground">Generating tax invoice…</p>
+      </div>
+    );
+  }
+
+  if (orderNumber && !uid) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+        <PackageSearch className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h1 className="mt-4 text-xl font-semibold">Sign in to view this invoice</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Invoices contain your address and phone number, so they are only shown to the account
+          that placed the order.
+        </p>
+        <div className="mt-6 flex justify-center">
+          <Button asChild>
+            <Link href="/account">Sign In</Link>
+          </Button>
+        </div>
       </div>
     );
   }

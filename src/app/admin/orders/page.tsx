@@ -150,6 +150,14 @@ export default function AdminOrdersPage() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="mr-2 text-lg font-semibold">{formatPrice(order.total)}</p>
+                    {order.client_written && (
+                      <span
+                        className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+                        title="This order was written by the customer's browser because the server could not write it. Compare the item prices and total with the catalogue before dispatch."
+                      >
+                        Total not verified — check prices
+                      </span>
+                    )}
                     {order.payment_status === "pending" && (
                       <Button
                         size="sm"

@@ -14,8 +14,10 @@ import {
   rateLimit,
   tooManyRequestsResponse,
 } from "@/lib/server/http";
-import { isSecureCheckout } from "@/lib/server/rtdb-admin";
-import { orderNumber, priceCart, type CartRequest } from "@/lib/server/price-cart";
+import { adminSet, isSecureCheckout } from "@/lib/server/rtdb-admin";
+import { pendingPath, type PendingCheckout } from "@/lib/server/create-order";
+import { callerFrom } from "@/lib/server/id-token";
+import { digits, orderNumber, priceCart, type CartRequest } from "@/lib/server/price-cart";
 import {
   createRazorpayOrder,
   razorpayConfigured,
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
 
   // Every call creates a real gateway order against the store's account, so an
   // unthrottled loop here is somebody else spending our API quota.
-  const gate = rateLimit(`payments:${clientIp(request)}`, 15, 10 * 60 * 1000);
+  const gate = await rateLimit(`payments:${clientIp(request)}`, 15, 10 * 60 * 1000);
   if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
 
   if (!razorpayConfigured()) {
@@ -64,7 +66,9 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Could not read the order." }, { status: 400 });
   }
 
-  const priced = await priceCart(body);
+  // The token's uid, when present, drives the once-per-customer coupon check.
+  const caller = await callerFrom(request);
+  const priced = await priceCart(body, caller?.uid ?? null);
   if (!priced.ok) {
     return Response.json({ ok: false, error: priced.error }, { status: priced.status });
   }
@@ -88,6 +92,50 @@ export async function POST(request: Request) {
         ...(priced.cart.totals.couponCode ? { coupon: priced.cart.totals.couponCode } : {}),
       },
     });
+
+    // Save what is needed to write the order later. If the customer pays and
+    // their browser never reports back, the gateway webhook finishes the order
+    // from this record. Skipped when the delivery details are incomplete — the
+    // browser path still works, only the safety net is missing.
+    const customer = body.customer ?? {};
+    const complete =
+      Boolean(customer.name?.trim() && customer.address?.trim() && customer.city?.trim() && customer.state?.trim()) &&
+      digits(customer.phone ?? "").length >= 10 &&
+      digits(customer.pincode ?? "").length === 6;
+
+    if (caller && complete && isSecureCheckout()) {
+      const { totals, config, orderItems, appliedCoupon, couponKey } = priced.cart;
+      const pending: PendingCheckout = {
+        uid: caller.uid,
+        amount_paise: amountPaise,
+        customer: {
+          name: (customer.name ?? "").trim(),
+          phone: digits(customer.phone ?? ""),
+          email: customer.email?.trim() || null,
+          address: (customer.address ?? "").trim(),
+          city: (customer.city ?? "").trim(),
+          state: (customer.state ?? "").trim(),
+          pincode: digits(customer.pincode ?? ""),
+        },
+        orderItems,
+        totals,
+        taxRate: config.tax.enabled ? config.tax.rate : 0,
+        notes: body.notes?.trim() || null,
+        coupon: appliedCoupon
+          ? {
+              code: appliedCoupon.code,
+              key: couponKey,
+              maxUses: typeof appliedCoupon.max_uses === "number" ? appliedCoupon.max_uses : 0,
+            }
+          : null,
+        created_at: new Date().toISOString(),
+      };
+      try {
+        await adminSet(pendingPath(order.id), pending);
+      } catch (error) {
+        console.error("Could not save the pending checkout:", error);
+      }
+    }
 
     return Response.json(
       {

@@ -5,10 +5,11 @@
  * for throttling, and a check that the request really came from our own pages
  * rather than a stranger's tab.
  *
- * The throttle is in-memory and therefore per instance, which is enough to stop
- * a scripted loop from draining the database or the gateway quota. A shared
- * store would be stronger; nothing here pretends to be that.
+ * The throttle is shared through the database when the service account is
+ * configured, and falls back to a per-instance counter otherwise.
  */
+
+import { adminAdjustNumber, adminDelete, isSecureCheckout } from "@/lib/server/rtdb-admin";
 
 export function clientIp(request: Request): string {
   // Vercel rewrites these; Cloudflare sets its own. Only fall back to
@@ -35,11 +36,8 @@ const buckets = new Map<string, Bucket>();
 
 export type RateResult = { ok: true } | { ok: false; retryAfter: number };
 
-/**
- * Counts one hit against `key`. Returns `retryAfter` in seconds when the caller
- * is over the limit, so the route can answer with a useful 429.
- */
-export function rateLimit(key: string, limit: number, windowMs: number): RateResult {
+/** Per-instance counter: the fallback when the shared store is unavailable. */
+function memoryRateLimit(key: string, limit: number, windowMs: number): RateResult {
   const now = Date.now();
 
   if (buckets.size > 5000) {
@@ -58,6 +56,55 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateRes
   if (bucket.count <= limit) return { ok: true };
 
   return { ok: false, retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
+}
+
+async function hashKey(key: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(digest).slice(0, 16), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+/**
+ * Counts one hit against `key`. Returns `retryAfter` in seconds when the caller
+ * is over the limit, so the route can answer with a useful 429.
+ *
+ * On a serverless host every instance has its own memory, so an in-memory
+ * counter alone lets a caller multiply their budget by the number of warm
+ * instances. When the service account is configured the count is kept in the
+ * database instead (`rateLimits/{window}/{hashed key}`, incremented atomically),
+ * which every instance shares. The key is hashed so no IP address is stored.
+ * If the shared store cannot be reached the per-instance counter still applies.
+ */
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<RateResult> {
+  const local = memoryRateLimit(key, limit, windowMs);
+  if (!local.ok || !isSecureCheckout()) return local;
+
+  try {
+    const now = Date.now();
+    const windowIndex = Math.floor(now / windowMs);
+    const bucketPath = (index: number) => `rateLimits/${windowMs}_${index}`;
+    const count = await adminAdjustNumber(
+      `${bucketPath(windowIndex)}/${await hashKey(key)}`,
+      1,
+      3,
+      { createIfMissing: true },
+    );
+
+    // First hit of a window for this caller: sweep a long-finished window so
+    // the node never grows without bound.
+    if (count === 1) {
+      await adminDelete(bucketPath(windowIndex - 2)).catch(() => {});
+    }
+
+    if (count !== null && count > limit) {
+      const resetAt = (windowIndex + 1) * windowMs;
+      return { ok: false, retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)) };
+    }
+  } catch (error) {
+    console.warn("Shared rate limit unavailable, using the per-instance counter:", error);
+  }
+  return { ok: true };
 }
 
 /**

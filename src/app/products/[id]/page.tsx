@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import Image from "next/image";
+import Image from "@/components/store-image";
 import Link from "next/link";
 import { ChevronLeft, Heart, Truck, RotateCcw, Shield, Minus, Plus, Check } from "lucide-react";
 import { motion } from "framer-motion";

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/store-image";
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { ArrowRight, MapPin, Phone, Clock, Star, Sparkles, Heart, Truck, Shield, RotateCcw } from "lucide-react";

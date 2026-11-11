@@ -14,7 +14,7 @@ import {
   type PricingLine,
   type Totals,
 } from "@/lib/pricing";
-import { DB_ROOT } from "@/lib/server/rtdb-admin";
+import { DB_ROOT, adminGet, isSecureCheckout } from "@/lib/server/rtdb-admin";
 import type { Coupon, Order, Product, StoreSettings } from "@/lib/types";
 
 export type CartItemInput = {
@@ -27,6 +27,7 @@ export type CartItemInput = {
 export type CartRequest = {
   user_id?: string | null;
   coupon_code?: string | null;
+  notes?: string | null;
   items?: CartItemInput[];
   customer?: {
     name?: string;
@@ -77,6 +78,18 @@ export async function publicGet<T>(path: string): Promise<T | null> {
  */
 const ORDER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+/**
+ * Reads a coupon redemption record. These nodes hold customer phone numbers, so
+ * the database rules refuse anonymous reads — an unauthenticated fetch comes
+ * back "permission denied", which must never be mistaken for "not used yet".
+ * With the service account the read is authoritative; without it the server
+ * cannot know, and the signed-in browser check in checkout is the only guard.
+ */
+async function redemptionExists(path: string): Promise<boolean> {
+  if (!isSecureCheckout()) return false;
+  return (await adminGet<unknown>(path)) !== null;
+}
+
 export function orderNumber(now = new Date()): string {
   const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
     now.getDate(),
@@ -89,7 +102,15 @@ export function orderNumber(now = new Date()): string {
 
 export const digits = (value: string) => value.replace(/\D/g, "");
 
-export async function priceCart(body: CartRequest): Promise<PricedCartResult> {
+/**
+ * `verifiedUid` is the uid from the caller's ID token. When a route passes it,
+ * the once-per-customer coupon check uses it instead of the body's `user_id`,
+ * which a caller could change to dodge the check.
+ */
+export async function priceCart(
+  body: CartRequest,
+  verifiedUid?: string | null,
+): Promise<PricedCartResult> {
   const items = body.items ?? [];
   if (!items.length) {
     return { ok: false, status: 400, error: "Your bag is empty." };
@@ -172,30 +193,39 @@ export async function priceCart(body: CartRequest): Promise<PricedCartResult> {
     }
 
     if (coupon) {
-      const uid = body.user_id?.trim();
-      if (uid && uid !== "guest") {
-        const alreadyUsed = await publicGet(`couponRedemptions/${coupon.code}/${uid}`);
-        if (alreadyUsed) {
+      const uid = (verifiedUid ?? body.user_id ?? "").trim();
+      const phone10 = digits(body.customer?.phone ?? "").slice(-10);
+      const withoutCoupon = () => computeTotals({ lines, coupon: null, config });
+
+      try {
+        if (uid && uid !== "guest" && (await redemptionExists(`couponRedemptions/${coupon.code}/${uid}`))) {
           return {
             ok: false,
             status: 409,
             error: `You have already used coupon code ${coupon.code}. Coupons can only be redeemed once per customer.`,
-            totals: computeTotals({ lines, coupon: null, config }),
+            totals: withoutCoupon(),
           };
         }
-      }
-
-      const phone10 = digits(body.customer?.phone ?? "").slice(-10);
-      if (phone10.length === 10) {
-        const phoneUsed = await publicGet(`couponRedemptionsByPhone/${coupon.code}/${phone10}`);
-        if (phoneUsed) {
+        if (
+          phone10.length === 10 &&
+          (await redemptionExists(`couponRedemptionsByPhone/${coupon.code}/${phone10}`))
+        ) {
           return {
             ok: false,
             status: 409,
             error: `Coupon code ${coupon.code} has already been redeemed for this mobile number.`,
-            totals: computeTotals({ lines, coupon: null, config }),
+            totals: withoutCoupon(),
           };
         }
+      } catch (error) {
+        // Fail closed: an unreadable history must not hand out a second discount.
+        console.error("Coupon redemption check failed:", error);
+        return {
+          ok: false,
+          status: 503,
+          error: "We could not check that coupon right now. Please try again in a moment.",
+          totals: withoutCoupon(),
+        };
       }
     }
   }

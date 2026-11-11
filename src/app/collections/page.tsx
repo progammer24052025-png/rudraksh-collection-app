@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/store-image";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { collectionImages } from "@/lib/config";

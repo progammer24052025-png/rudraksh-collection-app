@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/store-image";
 import { Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import { type Product, effectivePrice, formatPrice } from "@/lib/store-data";

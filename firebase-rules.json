@@ -39,18 +39,20 @@
         ]
       },
       "couponRedemptions": {
-        ".read": "auth != null",
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         "$code": {
           "$uid": {
-            ".write": "auth != null && $uid === auth.uid && newData.child('user_id').val() === auth.uid"
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && $uid === auth.uid && !data.exists() && newData.child('user_id').val() === auth.uid"
           }
         }
       },
       "couponRedemptionsByPhone": {
-        ".read": "auth != null",
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         "$code": {
           "$phone": {
-            ".write": "auth != null && newData.child('user_id').val() === auth.uid"
+            ".read": "auth != null && (!data.exists() || data.child('user_id').val() === auth.uid)",
+            ".write": "auth != null && !data.exists() && newData.child('user_id').val() === auth.uid"
           }
         }
       },
@@ -93,7 +95,7 @@
         ],
         "$orderId": {
           ".read": "auth != null && (data.child('user_id').val() === auth.uid || root.child('rudraksh/admins').child(auth.uid).exists())",
-          ".write": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists() || (!data.exists() && newData.child('user_id').val() === auth.uid && newData.hasChildren(['order_number', 'customer_name', 'phone', 'address', 'city', 'state', 'pincode', 'items', 'total', 'order_status']) && newData.child('payment_status').val() === 'pending' && newData.child('order_status').val() === 'placed' && newData.child('total').isNumber() && newData.child('total').val() >= 0)",
+          ".write": "(auth != null && root.child('rudraksh/admins').child(auth.uid).exists()) || (auth != null && !data.exists() && newData.child('user_id').val() === auth.uid && newData.child('client_written').val() === true && !newData.child('stock_decremented').exists() && newData.hasChildren(['order_number', 'customer_name', 'phone', 'address', 'city', 'state', 'pincode', 'items', 'total', 'order_status']) && newData.child('payment_status').val() === 'pending' && newData.child('order_status').val() === 'placed' && newData.child('total').isNumber() && newData.child('total').val() >= 0)",
           ".validate": "newData.hasChildren(['order_number', 'customer_name', 'phone', 'items', 'total']) || !newData.exists()"
         }
       },
@@ -117,7 +119,7 @@
         ".write": false
       },
       "tracking": {
-        ".read": true,
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         ".indexOn": [
           "order_number"
         ],
@@ -137,6 +139,14 @@
           ".write": "!data.exists() && newData.hasChildren(['name', 'email', 'message', 'status', 'created_at'])",
           ".validate": "newData.child('email').val().contains('@') && newData.child('name').val().length <= 120 && newData.child('message').val().length <= 4000 && newData.child('status').val() === 'new' || !newData.exists()"
         }
+      },
+      "pendingPayments": {
+        ".read": false,
+        ".write": false
+      },
+      "rateLimits": {
+        ".read": false,
+        ".write": false
       }
     }
   }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/store-image";
 import {
   ChevronLeft,
   MapPin,
@@ -495,6 +495,8 @@ function CheckoutContent() {
         secure?: boolean;
         error?: string;
         payment_id?: string;
+        /** Paid, and the gateway's own confirmation is writing the order. */
+        recording?: boolean;
         order?: { id: string; order_number: string } | null;
       };
 
@@ -503,7 +505,9 @@ function CheckoutContent() {
         // us reconcile instead of asking the customer to pay twice.
         if (proof) {
           setPaymentIssue(
-            data.payment_id
+            data.recording && data.error
+              ? data.error
+              : data.payment_id
               ? `Your payment (${data.payment_id}) went through, but the order could not be saved. Please contact us with this reference — do not pay again.`
               : "Your payment may have gone through, but the order could not be saved. Please contact us before paying again.",
           );
@@ -580,6 +584,17 @@ function CheckoutContent() {
         body: JSON.stringify({
           user_id: user?.uid ?? null,
           coupon_code: coupon?.code ?? null,
+          // Lets the server finish the order from the gateway's own
+          // confirmation if this tab never reports the payment back.
+          customer: {
+            name: address.fullName,
+            phone: address.phone,
+            email: address.email,
+            address: address.address,
+            city: address.city,
+            state: address.state,
+            pincode: address.pincode,
+          },
           items: items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
