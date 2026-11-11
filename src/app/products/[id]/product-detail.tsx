@@ -139,12 +139,26 @@ function ProductDetailContent({ slug }: { slug: string }) {
     toast.success(saved ? "Removed from wishlist" : "Saved to wishlist");
   };
 
-  const checkDelivery = () => {
-    if (isValidPincode(pincode)) {
-      setDeliveryInfo(`We deliver to ${pincode}. Estimated arrival ${eta.from} – ${eta.to}.`);
-    } else {
+  const checkDelivery = async () => {
+    if (!isValidPincode(pincode)) {
       setDeliveryInfo(null);
       toast.error("Please enter a valid 6-digit pincode");
+      return;
+    }
+    const arrival = `We deliver to ${pincode}. Estimated arrival ${eta.from} – ${eta.to}.`;
+    setDeliveryInfo(arrival);
+    if (!storeConfig.shipping?.distanceEnabled) return;
+    try {
+      const response = await fetch(`/api/shipping?pincode=${pincode}`);
+      const data = (await response.json()) as { ok?: boolean; fee?: number; freeAbove?: number };
+      if (data.ok && typeof data.fee === "number") {
+        setDeliveryInfo(
+          `${arrival} Delivery ${data.fee === 0 ? "is free" : `is ${formatPrice(data.fee)}`}` +
+            (data.fee > 0 && data.freeAbove ? `, or free on orders above ${formatPrice(data.freeAbove)}.` : "."),
+        );
+      }
+    } catch {
+      /* the arrival estimate is still shown */
     }
   };
 

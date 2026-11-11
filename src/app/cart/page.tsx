@@ -24,7 +24,11 @@ function CartContent() {
   const storeConfig = useStore();
   const { items, updateQuantity, removeItem, getCartTotal, getProduct, setProducts, isHydrated } = useCart();
   const cartTotal = getCartTotal();
-  const shipping = cartTotal >= storeConfig.freeShippingThreshold ? 0 : storeConfig.shippingFee;
+  // With distance pricing the charge is unknown until a PIN code is entered at
+  // checkout, so the cart shows "calculated at checkout" instead of a guess.
+  const byDistance = Boolean(storeConfig.shipping?.distanceEnabled);
+  const freeDelivery = cartTotal >= storeConfig.freeShippingThreshold;
+  const shipping = freeDelivery || byDistance ? 0 : storeConfig.shippingFee;
   const [catalogue, setCatalogue] = useState<Product[]>([]);
   const [coupon, setCoupon] = useState<Coupon | null>(null);
   const handleCoupon = useCallback((next: Coupon | null) => setCoupon(next), []);
@@ -207,7 +211,13 @@ function CartContent() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
                 <span className="font-medium">
-                  {shipping === 0 ? <span className="text-sage">FREE</span> : formatPrice(shipping)}
+                  {freeDelivery ? (
+                    <span className="text-sage">FREE</span>
+                  ) : byDistance ? (
+                    <span className="text-muted-foreground">At checkout</span>
+                  ) : (
+                    formatPrice(shipping)
+                  )}
                 </span>
               </div>
               {discount > 0 && coupon && (
@@ -218,7 +228,9 @@ function CartContent() {
               )}
               <div className="border-t border-border pt-3">
                 <div className="flex justify-between text-base">
-                  <span className="font-semibold">{discount > 0 ? "Estimated total" : "Total"}</span>
+                  <span className="font-semibold">
+                    {discount > 0 || (byDistance && !freeDelivery) ? "Estimated total" : "Total"}
+                  </span>
                   <span className="font-semibold">{formatPrice(grandTotal)}</span>
                 </div>
                 {listSavings + discount > 0 && (
@@ -255,7 +267,10 @@ function CartContent() {
             Add {formatPrice(gap)} more for free delivery
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Delivery is {formatPrice(storeConfig.shippingFee)} below {formatPrice(storeConfig.freeShippingThreshold)}. These would cover it.
+            {byDistance
+              ? `Delivery is charged by distance below ${formatPrice(storeConfig.freeShippingThreshold)}.`
+              : `Delivery is ${formatPrice(storeConfig.shippingFee)} below ${formatPrice(storeConfig.freeShippingThreshold)}.`}{" "}
+            These would cover it.
           </p>
           <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
             {suggestions.map((product, index) => (

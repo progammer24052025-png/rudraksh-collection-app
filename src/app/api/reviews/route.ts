@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       const order = await adminGet<Order>(`orders/${orderId}`);
       if (!order || order.user_id !== caller.uid || order.order_status !== "delivered") continue;
       const line = (Array.isArray(order.items) ? order.items : []).find(
-        (item) => item?.productId === productId,
+        (item) => item?.productId === productId && !item.cancelled,
       );
       if (line) {
         purchase = { order, size: line.size || null };

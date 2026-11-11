@@ -9,6 +9,8 @@ import { isFirebaseConfigured, subscribeSettings } from "./firebase";
 import type { StoreSettings } from "./types";
 
 export type ResolvedStore = typeof storeConfig & {
+  /** Distance-based delivery rules, when the store has saved any. */
+  shipping?: StoreSettings["shipping"];
   announcement: string;
   isLive: boolean;
   supportEmail: string;

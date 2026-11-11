@@ -104,6 +104,9 @@ export interface OrderItem {
   quantity: number;
   price: number;
   image: string;
+  /** Set when this line was cancelled after the order was placed. */
+  cancelled?: boolean;
+  cancelled_at?: string;
 }
 
 export interface OrderStatusEvent {
@@ -144,6 +147,15 @@ export interface Order {
    * prices and total were not verified server-side — check them before dispatch.
    */
   client_written?: boolean;
+  /** Straight-line km from the store, when the delivery charge was distance-based. */
+  delivery_distance_km?: number | null;
+  /**
+   * Rupees still owed back to the customer for cancelled items on a paid
+   * order. Cleared once the refund has been made.
+   */
+  refund_due?: number;
+  cancel_reason?: string | null;
+  cancelled_at?: string;
   /** True when the server removed these units from stock for this order. */
   stock_decremented?: boolean;
   status_history: OrderStatusEvent[];
@@ -227,6 +239,13 @@ export interface StoreSettings {
     /** True when catalogue prices already include GST. */
     inclusive?: boolean;
     label?: string;
+  };
+  /** Delivery charges by distance. See src/lib/shipping.ts. */
+  shipping?: {
+    distanceEnabled?: boolean;
+    storePincode?: string;
+    slabs?: Array<{ upToKm: number; fee: number }>;
+    beyondFee?: number;
   };
   /** Switches for what the store does by itself. See src/lib/automation.ts. */
   automation?: {

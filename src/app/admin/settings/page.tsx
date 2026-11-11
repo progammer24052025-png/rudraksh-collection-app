@@ -12,6 +12,8 @@ import { AdminNav } from "@/components/admin-nav";
 import { getFirebaseAuth, readSettings, saveSettings } from "@/lib/firebase";
 import { AUTOMATION_DEFAULTS, resolveAutomation } from "@/lib/automation";
 import { Switch } from "@/components/ui/switch";
+import { Plus, Trash2 } from "lucide-react";
+import { DEFAULT_BEYOND_FEE, DEFAULT_SLABS, MAX_SLABS, normalizeShipping } from "@/lib/shipping";
 import { storeConfig } from "@/lib/config";
 import type { StoreSettings } from "@/lib/types";
 
@@ -50,6 +52,10 @@ type FormState = Required<
   reviewRequest: boolean;
   newProductEmails: boolean;
   lowStockThreshold: string;
+  distanceEnabled: boolean;
+  storePincode: string;
+  slabs: Array<{ upToKm: string; fee: string }>;
+  beyondFee: string;
 };
 
 const DEFAULTS: FormState = {
@@ -83,6 +89,10 @@ const DEFAULTS: FormState = {
   reviewRequest: AUTOMATION_DEFAULTS.reviewRequest,
   newProductEmails: AUTOMATION_DEFAULTS.newProductEmails,
   lowStockThreshold: String(AUTOMATION_DEFAULTS.lowStockThreshold),
+  distanceEnabled: false,
+  storePincode: "",
+  slabs: DEFAULT_SLABS.map((slab) => ({ upToKm: String(slab.upToKm), fee: String(slab.fee) })),
+  beyondFee: String(DEFAULT_BEYOND_FEE),
 };
 
 export default function AdminSettingsPage() {
@@ -141,6 +151,16 @@ export default function AdminSettingsPage() {
           taxEnabled: settings.tax?.enabled ?? current.taxEnabled,
           taxInclusive: settings.tax?.inclusive ?? current.taxInclusive,
           ...(() => {
+            const rules = normalizeShipping(settings);
+            return {
+              // The raw saved switch, so it can be turned on before a PIN is typed.
+              distanceEnabled: Boolean(settings.shipping?.distanceEnabled),
+              storePincode: rules.storePincode,
+              slabs: rules.slabs.map((slab) => ({ upToKm: String(slab.upToKm), fee: String(slab.fee) })),
+              beyondFee: String(rules.beyondFee),
+            };
+          })(),
+          ...(() => {
             const automation = resolveAutomation(settings);
             return {
               autoConfirmCod: automation.autoConfirmCod,
@@ -158,6 +178,19 @@ export default function AdminSettingsPage() {
   }, []);
 
   const handleSave = async () => {
+    const storePincode = form.storePincode.replace(/\D/g, "").slice(0, 6);
+    if (form.distanceEnabled && !/^[1-8]\d{5}$/.test(storePincode)) {
+      toast.error("Enter the store's 6-digit PIN code to charge delivery by distance.");
+      return;
+    }
+    const slabs = form.slabs
+      .map((slab) => ({ upToKm: Number(slab.upToKm), fee: Math.round(Number(slab.fee)) }))
+      .filter((slab) => Number.isFinite(slab.upToKm) && slab.upToKm > 0 && Number.isFinite(slab.fee) && slab.fee >= 0)
+      .sort((a, b) => a.upToKm - b.upToKm);
+    if (form.distanceEnabled && !slabs.length) {
+      toast.error("Add at least one distance band.");
+      return;
+    }
     setSaving(true);
     try {
       await saveSettings({
@@ -186,6 +219,12 @@ export default function AdminSettingsPage() {
           rate: Math.min(0.99, Math.max(0, (Number(form.taxRate) || 0) / 100)),
           inclusive: form.taxInclusive,
           label: form.taxLabel.trim() || "GST",
+        },
+        shipping: {
+          distanceEnabled: form.distanceEnabled,
+          storePincode,
+          slabs,
+          beyondFee: Math.max(0, Math.round(Number(form.beyondFee) || 0)),
         },
         automation: {
           autoConfirmCod: form.autoConfirmCod,
@@ -438,6 +477,116 @@ export default function AdminSettingsPage() {
                 onChange={(event) => setForm({ ...form, shippingFee: event.target.value })}
               />
             </div>
+          </div>
+
+          <div className="space-y-4 border-t border-border pt-6">
+            <div className="flex items-start justify-between gap-4">
+              <label htmlFor="distance-enabled" className="cursor-pointer">
+                <span className="block text-sm font-medium">Charge delivery by distance</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                  Off: every order below the free-shipping amount pays the flat fee above. On: the
+                  fee depends on how far the customer&apos;s PIN code is from the store. Orders above
+                  the free-shipping amount stay free either way.
+                </span>
+              </label>
+              <Switch
+                id="distance-enabled"
+                checked={form.distanceEnabled}
+                onCheckedChange={(checked) => setForm({ ...form, distanceEnabled: checked })}
+              />
+            </div>
+
+            {form.distanceEnabled && (
+              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                <div className="space-y-2 sm:max-w-[220px]">
+                  <Label htmlFor="store-pincode">Store PIN code</Label>
+                  <Input
+                    id="store-pincode"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="390019"
+                    value={form.storePincode}
+                    onChange={(event) =>
+                      setForm({ ...form, storePincode: event.target.value.replace(/\D/g, "").slice(0, 6) })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Distance bands</Label>
+                  {form.slabs.map((slab, index) => (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <span className="w-12 shrink-0 text-muted-foreground">Up to</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        aria-label={`Band ${index + 1} distance in km`}
+                        className="w-24"
+                        value={slab.upToKm}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            slabs: form.slabs.map((row, i) => (i === index ? { ...row, upToKm: event.target.value } : row)),
+                          })
+                        }
+                      />
+                      <span className="shrink-0 text-muted-foreground">km  →  ₹</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        aria-label={`Band ${index + 1} fee in rupees`}
+                        className="w-24"
+                        value={slab.fee}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            slabs: form.slabs.map((row, i) => (i === index ? { ...row, fee: event.target.value } : row)),
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove band ${index + 1}`}
+                        disabled={form.slabs.length <= 1}
+                        onClick={() => setForm({ ...form, slabs: form.slabs.filter((_, i) => i !== index) })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="w-12 shrink-0 text-muted-foreground">Beyond</span>
+                    <span className="w-24 shrink-0 text-muted-foreground">the last band</span>
+                    <span className="shrink-0 text-muted-foreground">→  ₹</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      aria-label="Fee beyond the last band"
+                      className="w-24"
+                      value={form.beyondFee}
+                      onChange={(event) => setForm({ ...form, beyondFee: event.target.value })}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={form.slabs.length >= MAX_SLABS}
+                    onClick={() => setForm({ ...form, slabs: [...form.slabs, { upToKm: "", fee: "" }] })}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Add band
+                  </Button>
+                </div>
+
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Distance is the straight line between the two PIN codes, so road distance is a
+                  little more. If a PIN code cannot be located, the flat fee above is charged
+                  instead. Use ₹0 in a band for free local delivery.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4 border-t border-border pt-6">

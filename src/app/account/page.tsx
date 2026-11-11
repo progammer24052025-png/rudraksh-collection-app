@@ -559,9 +559,13 @@ function OrdersTab() {
               {order.items?.length > 0 && (
                 <div className="mt-3 space-y-1 border-t border-border pt-3">
                   {order.items.map((item, index) => (
-                    <div key={`${item.productId}-${index}`} className="flex items-center justify-between text-sm">
+                    <div
+                      key={`${item.productId}-${index}`}
+                      className={`flex items-center justify-between text-sm ${item.cancelled ? "line-through opacity-60" : ""}`}
+                    >
                       <span className="text-muted-foreground">
                         {item.name} ({item.size}{item.color ? `, ${item.color}` : ""}) × {item.quantity}
+                        {item.cancelled ? " — cancelled" : ""}
                       </span>
                       <span>{formatPrice(item.price * item.quantity)}</span>
                     </div>

@@ -185,8 +185,10 @@ export async function POST(request: Request) {
       name: caller.name,
       email: caller.email,
       method: String(body.method ?? "Unknown"),
-      ip: String(body.ip ?? clientIp(request)),
-      userAgent: String(body.userAgent ?? request.headers.get("user-agent") ?? ""),
+      // Taken from the connection, never from the request body: a body-supplied
+      // value would let whoever signed in choose what the alert says.
+      ip: clientIp(request),
+      userAgent: String(request.headers.get("user-agent") ?? ""),
     });
     const result = await sendMail({ to: caller.email, ...mail });
     return result.ok ? json({ ok: true }) : json({ ok: false, error: result.error }, 502);

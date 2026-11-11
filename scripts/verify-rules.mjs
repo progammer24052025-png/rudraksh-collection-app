@@ -40,6 +40,7 @@ const checks = [
   ["stockAlerts", "deny", "holds customer email addresses"],
   ["userState", "deny", "per-account saved bag and wishlist"],
   ["serverState", "deny", "server only"],
+  ["pincodeGeo", "deny", "server only"],
 ];
 
 if (keyArg) {

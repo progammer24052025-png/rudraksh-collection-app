@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, RefreshCw, Check, FileText, ChevronsRight } from "lucide-react";
+import { Search, Loader2, RefreshCw, Check, FileText, ChevronsRight, XCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
 import { BillDialog } from "@/components/order-bill";
+import { CancelOrderDialog } from "@/components/cancel-order-dialog";
 import { toBillOrder } from "@/lib/order-document";
 import { toast } from "sonner";
-import { formatPrice, subscribeOrders, updateOrderStatus } from "@/lib/firebase";
+import { formatPrice, subscribeOrders, updateOrderStatus, updateValue } from "@/lib/firebase";
 import { ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, statusLabel } from "@/lib/orders";
 import { nextOrderStep } from "@/lib/automation";
 import type { Order, OrderStatus, PaymentStatus } from "@/lib/types";
@@ -22,6 +23,9 @@ export default function AdminOrdersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [billOrder, setBillOrder] = useState<Order | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  // Looked up live, so the dialog closes itself if the order changes underneath it.
+  const cancelOrder = orders.find((order) => order.id === cancelOrderId) ?? null;
 
   // The dashboard links here with ?status=… so a task opens already filtered.
   useEffect(() => {
@@ -51,6 +55,12 @@ export default function AdminOrdersPage() {
   }, [orders, filter, search]);
 
   const changeStatus = async (order: Order, status: OrderStatus) => {
+    // Cancelling always goes through "which items?" — it restores stock and
+    // works out any refund, which a plain status change does not.
+    if (status === "cancelled") {
+      if (order.order_status !== "cancelled") setCancelOrderId(order.id);
+      return;
+    }
     setBusyId(order.id);
     try {
       const extra: { payment_status?: PaymentStatus } = {};
@@ -66,6 +76,31 @@ export default function AdminOrdersPage() {
     } catch (error) {
       console.error(error);
       toast.error("Could not update the order status");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const markRefunded = async (order: Order) => {
+    setBusyId(order.id);
+    try {
+      const now = new Date().toISOString();
+      const remaining = (order.items ?? []).some((item) => !item.cancelled);
+      await updateValue(["orders", order.id], {
+        refund_due: 0,
+        // A fully cancelled, fully refunded order is "refunded"; a part-refund
+        // leaves the rest of the order paid.
+        ...(remaining ? {} : { payment_status: "refunded" }),
+        status_history: [
+          ...(Array.isArray(order.status_history) ? order.status_history : []),
+          { status: order.order_status, at: now, note: `Refund of ${formatPrice(order.refund_due ?? 0)} completed` },
+        ],
+        updated_at: now,
+      });
+      toast.success("Refund marked as done");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not update the order");
     } finally {
       setBusyId(null);
     }
@@ -206,6 +241,25 @@ export default function AdminOrdersPage() {
                         Total not verified — check prices
                       </span>
                     )}
+                    {(order.refund_due ?? 0) > 0 && (
+                      <>
+                        <span
+                          className="rounded-md border border-rose/40 bg-rose/10 px-2 py-1 text-xs font-medium text-foreground"
+                          title="Cancelled items on a paid order. Refund this amount from the Razorpay dashboard (or by UPI/cash), then mark it done."
+                        >
+                          Refund due {formatPrice(order.refund_due ?? 0)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 text-xs"
+                          onClick={() => markRefunded(order)}
+                          disabled={busyId === order.id}
+                        >
+                          <Check className="mr-1 h-3.5 w-3.5" /> Refund done
+                        </Button>
+                      </>
+                    )}
                     {(() => {
                       const step = nextOrderStep(order.order_status);
                       return step ? (
@@ -233,6 +287,16 @@ export default function AdminOrdersPage() {
                     <Button variant="outline" size="sm" onClick={() => setBillOrder(order)}>
                       <FileText className="mr-1.5 h-3.5 w-3.5" /> Bill
                     </Button>
+                    {order.order_status !== "cancelled" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 text-xs text-destructive hover:text-destructive"
+                        onClick={() => setCancelOrderId(order.id)}
+                      >
+                        <XCircle className="mr-1 h-3.5 w-3.5" /> Cancel items
+                      </Button>
+                    )}
                     <Select value={order.order_status} onValueChange={(value) => changeStatus(order, value as OrderStatus)}>
                       <SelectTrigger className="w-36 capitalize"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -260,9 +324,13 @@ export default function AdminOrdersPage() {
                 {Array.isArray(order.items) && order.items.length > 0 && (
                   <div className="mt-3 space-y-1 border-t border-border pt-3">
                     {order.items.map((item, index) => (
-                      <div key={`${item.productId}-${index}`} className="flex items-center justify-between text-sm">
+                      <div
+                        key={`${item.productId}-${index}`}
+                        className={`flex items-center justify-between text-sm ${item.cancelled ? "text-muted-foreground line-through" : ""}`}
+                      >
                         <span className="text-muted-foreground">
                           {item.name} ({item.size}{item.color ? `, ${item.color}` : ""}) × {item.quantity}
+                          {item.cancelled ? " — cancelled" : ""}
                         </span>
                         <span>{formatPrice(item.price * item.quantity)}</span>
                       </div>
@@ -286,6 +354,7 @@ export default function AdminOrdersPage() {
 
         {/* The bill is issued for every order; a receipt is added only when the
             payment was made online and has settled. */}
+        <CancelOrderDialog order={cancelOrder} onClose={() => setCancelOrderId(null)} />
         <BillDialog
           order={billOrder ? toBillOrder(billOrder) : null}
           open={Boolean(billOrder)}

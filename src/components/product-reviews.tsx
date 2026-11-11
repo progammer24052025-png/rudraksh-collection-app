@@ -63,7 +63,7 @@ export function ProductReviews({ productId }: { productId: string }) {
         (order) =>
           order.order_status === "delivered" &&
           Array.isArray(order.items) &&
-          order.items.some((item) => item.productId === productId),
+          order.items.some((item) => item.productId === productId && !item.cancelled),
       ),
     [orders, productId],
   );

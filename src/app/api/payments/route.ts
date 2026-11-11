@@ -104,7 +104,7 @@ export async function POST(request: Request) {
       digits(customer.pincode ?? "").length === 6;
 
     if (caller && complete && isSecureCheckout()) {
-      const { totals, config, orderItems, appliedCoupon, couponKey } = priced.cart;
+      const { totals, config, orderItems, appliedCoupon, couponKey, distanceKm } = priced.cart;
       const pending: PendingCheckout = {
         uid: caller.uid,
         amount_paise: amountPaise,
@@ -121,6 +121,7 @@ export async function POST(request: Request) {
         totals,
         taxRate: config.tax.enabled ? config.tax.rate : 0,
         notes: body.notes?.trim() || null,
+        distanceKm,
         coupon: appliedCoupon
           ? {
               code: appliedCoupon.code,

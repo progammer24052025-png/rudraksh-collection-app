@@ -175,6 +175,10 @@
       "serverState": {
         ".read": false,
         ".write": false
+      },
+      "pincodeGeo": {
+        ".read": false,
+        ".write": false
       }
     }
   }

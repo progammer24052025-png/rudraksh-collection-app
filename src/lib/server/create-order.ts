@@ -56,6 +56,8 @@ export type RecordOrderInput = {
   payment: { orderId: string; paymentId: string } | null;
   notes: string | null;
   coupon: OrderCoupon | null;
+  /** Km from the store when delivery was priced by distance. */
+  distanceKm?: number | null;
 };
 
 export type RecordOrderResult =
@@ -151,6 +153,7 @@ export type PendingCheckout = {
   taxRate: number;
   notes: string | null;
   coupon: OrderCoupon | null;
+  distanceKm?: number | null;
   created_at: string;
 };
 
@@ -235,6 +238,7 @@ export async function recordOrder(input: RecordOrderInput): Promise<RecordOrderR
     razorpay_order_id: payment?.orderId ?? null,
     razorpay_payment_id: payment?.paymentId ?? null,
     notes: input.notes,
+    ...(typeof input.distanceKm === "number" ? { delivery_distance_km: input.distanceKm } : {}),
     status_history: history,
     created_at: iso,
     updated_at: iso,

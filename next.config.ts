@@ -19,7 +19,6 @@ if (isDev && !onVercel) {
     });
 }
 
-const LOADER = path.resolve(__dirname, 'src/visual-edits/component-tagger-loader.js');
 
 /**
  * The image optimizer only fetches from the hosts in `src/lib/image-hosts.ts`
@@ -103,11 +102,10 @@ const nextConfig: NextConfig = {
     ];
   },
   outputFileTracingRoot: path.resolve(__dirname),
-  turbopack: {
-    rules: {
-      "*.{jsx,tsx}": { loaders: [LOADER] },
-    },
-  },
+  // The visual-editor loader that used to be wired in here stamped every element
+  // with its source file and line number (data-orchids-id="src\app\…:76:4"),
+  // which shipped the project's file layout to every visitor and bloated each
+  // page. It is a design-time tool and has no place in a production build.
 };
 
 export default nextConfig;

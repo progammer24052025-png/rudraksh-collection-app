@@ -15,6 +15,7 @@ import {
   type Totals,
 } from "@/lib/pricing";
 import { DB_ROOT, adminGet, isSecureCheckout } from "@/lib/server/rtdb-admin";
+import { quoteShipping } from "@/lib/server/geo";
 import type { Coupon, Order, Product, StoreSettings } from "@/lib/types";
 
 export type CartItemInput = {
@@ -49,6 +50,8 @@ export type PricedCart = {
   appliedCoupon: Coupon | null;
   /** The database key `appliedCoupon` lives under, which is not always its `code`. */
   couponKey: string | null;
+  /** Km from the store when the delivery charge was distance-based, else null. */
+  distanceKm: number | null;
   settings: StoreSettings;
 };
 
@@ -167,11 +170,16 @@ export async function priceCart(
   }
 
   const settings = (await publicGet<StoreSettings>("settings")) ?? {};
-  const config = normalizePricing({
+  const baseConfig = normalizePricing({
     freeShippingThreshold: settings.freeShippingThreshold,
     shippingFee: settings.shippingFee,
     tax: settings.tax,
   });
+  // Delivery is priced by distance to the customer's PIN code when the store
+  // has switched that on; otherwise (or if the PIN cannot be located) it is
+  // the flat fee. Free delivery above the threshold applies either way.
+  const shippingQuote = await quoteShipping(settings, body.customer?.pincode, baseConfig.shippingFee);
+  const config = { ...baseConfig, shippingFee: shippingQuote.fee };
 
   let coupon: Coupon | null = null;
   let couponKey: string | null = null;
@@ -244,6 +252,15 @@ export async function priceCart(
 
   return {
     ok: true,
-    cart: { totals, config, orderItems, coupon, appliedCoupon, couponKey, settings },
+    cart: {
+      totals,
+      config,
+      orderItems,
+      coupon,
+      appliedCoupon,
+      couponKey,
+      distanceKm: shippingQuote.distanceKm,
+      settings,
+    },
   };
 }

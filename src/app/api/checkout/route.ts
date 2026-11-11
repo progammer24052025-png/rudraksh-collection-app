@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { totals, config, orderItems, appliedCoupon, couponKey } = priced.cart;
+  const { totals, config, orderItems, appliedCoupon, couponKey, distanceKm } = priced.cart;
   const method = body.payment_method === "razorpay" ? "razorpay" : "cod";
   const secure = isSecureCheckout();
 
@@ -262,6 +262,7 @@ export async function POST(request: Request) {
       method,
       payment,
       notes: body.notes?.trim() || null,
+      distanceKm,
       coupon: appliedCoupon
         ? {
             code: appliedCoupon.code,

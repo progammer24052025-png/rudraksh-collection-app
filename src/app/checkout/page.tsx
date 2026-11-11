@@ -211,9 +211,22 @@ function CheckoutContent() {
 
   // The same engine the server uses, so the customer never sees one total and
   // gets charged another.
+  // When the store prices delivery by distance, the charge depends on the PIN
+  // code, so it is fetched from the server — the same figure the order uses.
+  const [deliveryQuote, setDeliveryQuote] = useState<{
+    pincode: string;
+    fee: number;
+    distanceKm: number | null;
+  } | null>(null);
+  const distancePricing = Boolean(storeConfig.shipping?.distanceEnabled);
+  const quotedFee =
+    distancePricing && deliveryQuote && deliveryQuote.pincode === address.pincode
+      ? deliveryQuote.fee
+      : null;
+
   const pricing = normalizePricing({
     freeShippingThreshold: storeConfig.freeShippingThreshold,
-    shippingFee: storeConfig.shippingFee,
+    shippingFee: quotedFee ?? storeConfig.shippingFee,
     tax: (storeConfig as unknown as StoreSettings).tax,
   });
 
@@ -296,6 +309,21 @@ function CheckoutContent() {
     void applyCoupon(pending);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per visit
   }, [user, totals.subtotal]);
+
+  useEffect(() => {
+    if (!distancePricing || !/^[1-8]\d{5}$/.test(address.pincode)) return;
+    let cancelled = false;
+    fetch(`/api/shipping?pincode=${address.pincode}`)
+      .then((response) => response.json())
+      .then((data: { ok?: boolean; pincode?: string; fee?: number; distanceKm?: number | null }) => {
+        if (cancelled || !data.ok || typeof data.fee !== "number" || !data.pincode) return;
+        setDeliveryQuote({ pincode: data.pincode, fee: data.fee, distanceKm: data.distanceKm ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [distancePricing, address.pincode]);
 
   // Prefill from the signed-in profile's default address.
   useEffect(() => {
@@ -1262,9 +1290,19 @@ function CheckoutContent() {
                   </div>
                 ) : null}
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping</span>
+                  <span className="text-muted-foreground">
+                    Shipping
+                    {quotedFee !== null && typeof deliveryQuote?.distanceKm === "number"
+                      ? ` (about ${deliveryQuote.distanceKm} km)`
+                      : ""}
+                  </span>
                   <span>{shipping === 0 ? <span className="text-sage">FREE</span> : formatPrice(shipping)}</span>
                 </div>
+                {distancePricing && quotedFee === null && shipping > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Delivery is priced by distance — enter your PIN code for the exact charge.
+                  </p>
+                ) : null}
                 <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
                   <span>Total</span>
                   <span>{formatPrice(grandTotal)}</span>

@@ -102,7 +102,7 @@ function InvoiceContent() {
     city: order.city,
     state: order.state,
     pincode: order.pincode,
-    items: order.items.map((i) => ({
+    items: order.items.filter((i) => !i.cancelled).map((i) => ({
       name: i.name,
       brand: i.brand,
       size: i.size,

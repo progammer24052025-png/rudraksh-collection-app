@@ -174,7 +174,8 @@ export function toBillOrder(order: Order): BillOrder {
     city: order.city,
     state: order.state,
     pincode: order.pincode,
-    items: Array.isArray(order.items) ? order.items : [],
+    // A bill lists what is actually being supplied.
+    items: Array.isArray(order.items) ? order.items.filter((item) => item && !item.cancelled) : [],
     subtotal: order.subtotal,
     discount: order.discount,
     taxable_base: order.taxable_base,

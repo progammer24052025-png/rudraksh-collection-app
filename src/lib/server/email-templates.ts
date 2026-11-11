@@ -73,9 +73,15 @@ const escape = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+/**
+ * The first word of a name, for greetings. Customers choose their own name and
+ * it lands in the HTML of store-branded emails (sometimes sent to an address
+ * somebody else typed), so anything that could form a tag, an entity or a link
+ * is removed rather than trusted.
+ */
 const firstName = (name?: string | null) => {
-  const trimmed = (name ?? "").trim();
-  return trimmed ? trimmed.split(/\s+/)[0] : "";
+  const trimmed = (name ?? "").replace(/[<>&"'`\/:@=()\[\]{}]/g, " ").trim();
+  return trimmed ? trimmed.split(/\s+/)[0].slice(0, 40) : "";
 };
 
 const greeting = (name?: string | null) => {
@@ -260,7 +266,7 @@ export function toEmailOrder(order: Order): EmailOrder {
     state: order.state,
     pincode: order.pincode,
     items: Array.isArray(order.items)
-      ? order.items.map((item) => ({
+      ? order.items.filter((item) => item && !item.cancelled).map((item) => ({
           productId: item.productId,
           name: item.name,
           brand: item.brand,
@@ -747,6 +753,59 @@ export function newArrivalsEmail(input: {
       ...(input.moreCount > 0 ? ["", `...and ${input.moreCount} more: ${siteUrl}/products`] : []),
       "",
       `Unsubscribe from new-arrival emails: ${input.unsubscribeUrl}`,
+      "",
+      `${storeConfig.name} · ${storeConfig.location}`,
+    ].join("\n"),
+  };
+}
+
+// ── Some items cancelled (to the customer) ──────────────────────────────────
+
+export function itemsCancelledEmail(input: {
+  order: EmailOrder;
+  cancelled: EmailOrderItem[];
+  /** Rupees being refunded; 0 when nothing was paid. */
+  refund: number;
+  reason?: string | null;
+}): MailContent {
+  const { order, cancelled } = input;
+  const refundText = input.refund > 0
+    ? `${money(input.refund)} will be refunded to your original payment method. Refunds usually take 5–7 working days to appear.`
+    : "You had not paid for these items, so there is nothing to refund.";
+
+  const blocks = `
+    <div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">
+      <div style="font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:${ROSE};margin-bottom:4px;">Order</div>
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:17px;color:${INK};">${escape(order.order_number)}</div>
+      <div style="margin-top:4px;font-size:12px;color:${MUTED};">New total ${money(order.total)}</div>
+    </div>
+    <p style="margin:18px 0 6px;font-size:13px;font-weight:600;color:${INK};">Cancelled</p>
+    ${itemsTable(cancelled)}
+    ${input.reason ? `<p style="margin:14px 0 0;font-size:14px;line-height:1.7;color:${MUTED};">Reason: ${escape(input.reason)}</p>` : ""}
+    <p style="margin:14px 0 0;font-size:14px;line-height:1.7;color:${MUTED};">${escape(refundText)}</p>
+    ${order.items?.length ? `<p style="margin:18px 0 6px;font-size:13px;font-weight:600;color:${INK};">Still on your order</p>${itemsTable(order.items)}` : ""}`;
+
+  return {
+    subject: `Update to your order ${order.order_number}: some items cancelled`,
+    html: layout({
+      preheader: `${cancelled.length} item${cancelled.length === 1 ? "" : "s"} cancelled on order ${order.order_number}.`,
+      heading: "Some items were cancelled",
+      intro: `${greeting(order.customer_name)} part of your order could not be fulfilled, so we have cancelled the items below. The rest of your order is going ahead.`,
+      blocks,
+      cta: { label: "Track your order", href: trackUrl },
+      closing: "We are sorry for the inconvenience. Reply to this email if anything looks wrong.",
+    }),
+    text: [
+      greeting(order.customer_name),
+      "",
+      `Some items on order ${order.order_number} were cancelled:`,
+      ...cancelled.map((item) => `- ${item.name} x ${item.quantity}`),
+      ...(input.reason ? ["", `Reason: ${input.reason}`] : []),
+      "",
+      refundText,
+      "",
+      `New order total: ${money(order.total)}`,
+      `Track your order: ${trackUrl}`,
       "",
       `${storeConfig.name} · ${storeConfig.location}`,
     ].join("\n"),

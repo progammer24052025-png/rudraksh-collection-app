@@ -135,6 +135,7 @@ export async function POST(request: Request) {
       method: "razorpay",
       payment: { orderId: razorpayOrderId, paymentId },
       notes: pending.notes ?? null,
+      distanceKm: pending.distanceKm ?? null,
       coupon: pending.coupon ?? null,
     });
 
