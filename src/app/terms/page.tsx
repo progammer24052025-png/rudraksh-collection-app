@@ -158,7 +158,7 @@ export default function TermsPage() {
                 <strong>Color Representation:</strong> We make every effort to display true product colors; however, actual colors may exhibit slight variations based on your device display settings.
               </li>
               <li>
-                <strong>Children&apos;s Sizing:</strong> Sizing charts provide standard age/height measurements. Slight variations (±1-2 cm) may occur across production batches. If size does not fit, our <strong>Free Size Exchange</strong> applies.
+                <strong>Sizing:</strong> Sizing charts provide standard age/height measurements. Slight variations (±1-2 cm) may occur across production batches. If size does not fit, our <strong>Free Size Exchange</strong> applies.
               </li>
             </ul>
           </div>

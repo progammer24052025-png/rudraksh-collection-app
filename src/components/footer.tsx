@@ -68,8 +68,8 @@ export function Footer() {
               <span className="font-serif text-xl font-semibold">{store.name}</span>
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              {store.tagline}. Quality children&apos;s wear from trusted brands, carefully selected
-              for little ones in {store.city} and across India.
+              {store.tagline}. Everyday and ethnic wear for men, women and kids from trusted brands,
+              carefully selected in {store.city} and delivered across India.
             </p>
             <div className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" />

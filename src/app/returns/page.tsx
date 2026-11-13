@@ -20,7 +20,7 @@ import { storeConfig } from "@/lib/config";
 export const metadata: Metadata = {
   title: "Returns & Refund Policy | Rudraksh Collection",
   description:
-    "7-day easy returns, free size exchanges, and transparent refund timelines for children's wear at Rudraksh Collection.",
+    "7-day easy returns, free size exchanges, and transparent refund timelines at Rudraksh Collection.",
 };
 
 const LAST_UPDATED = "7 November 2026";
@@ -41,7 +41,7 @@ export default function ReturnsPage() {
             Returns, Exchanges &amp; Refund Policy
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Clear, transparent policies for worry-free shopping for your little ones · Last Updated: {LAST_UPDATED}
+            Clear, transparent policies for worry-free shopping for the whole family · Last Updated: {LAST_UPDATED}
           </p>
         </div>
 
@@ -130,7 +130,7 @@ export default function ReturnsPage() {
                   <XCircle className="h-4 w-4" /> Non-Returnable Items
                 </span>
                 <ul className="mt-2 space-y-1 text-muted-foreground list-disc pl-4">
-                  <li>Children&apos;s innerwear, briefs, and vests (hygiene policy).</li>
+                  <li>Innerwear, briefs and vests (hygiene policy).</li>
                   <li>Socks and baby rattles/pacifiers once opened.</li>
                   <li>Items that have been washed, perfumed, or soiled.</li>
                   <li>Free gifts or promotional clearance bundles.</li>

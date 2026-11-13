@@ -40,10 +40,10 @@ export function BrandCarousel() {
           Our Brand Collection
         </p>
         <h2 className="mt-2 font-serif text-2xl font-medium sm:text-3xl lg:text-4xl">
-          Curated for Little Ones
+          Curated for the Whole Family
         </h2>
         <p className="mt-2 text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto">
-          Explore trusted children&apos;s apparel brands. Hover or click any brand to explore its collection.
+          Explore the trusted brands we stock for men, women and kids. Hover or click any brand to explore its collection.
         </p>
       </div>
 

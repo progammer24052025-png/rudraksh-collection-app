@@ -13,7 +13,7 @@ export function GET() {
   const url = (path: string) => `${siteUrl}${path}`;
   const body = `# ${storeConfig.name}
 
-> ${storeConfig.name} is a clothing store in ${storeConfig.city}, ${storeConfig.state}, India, best known for children's wear, with an online shop that delivers across India.
+> ${storeConfig.name} is a clothing store in ${storeConfig.city}, ${storeConfig.state}, India, selling everyday and ethnic wear for men, women and children, with an online shop that delivers across India.
 
 ## What the store sells
 - Departments: ${departments.map((d) => d.name).join(", ")}

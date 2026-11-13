@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Collections — Boys, Girls & Baby Wear",
+  title: "Collections — Men, Women & Kids",
   description:
-    "Browse boys', girls' and baby & toddler clothing by collection: everyday essentials, casual wear and occasion wear. Cash on delivery available.",
+    "Browse clothing for men, women and kids by collection: everyday essentials, casual wear and occasion wear. Cash on delivery available.",
   alternates: { canonical: "/collections" },
 };
 

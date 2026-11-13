@@ -5,7 +5,7 @@ import { ImageResponse } from "next/og";
  * (pages with their own product photo use that instead). Drawn from the mala
  * seal so every share carries the brand.
  */
-export const alt = "Rudraksh Collection — children's wear, Vadodara";
+export const alt = "Rudraksh Collection — clothing for men, women & kids, Vadodara";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -73,7 +73,7 @@ export default function OpengraphImage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ fontSize: 62, fontFamily: "serif", color: "#2D2A26", lineHeight: 1.05 }}>Rudraksh Collection</div>
           <div style={{ fontSize: 26, letterSpacing: 5, textTransform: "uppercase", color: "#995C5C" }}>
-            Children&apos;s wear · Vadodara
+            Men · Women · Kids · Vadodara
           </div>
           <div style={{ fontSize: 26, color: "#6B6560", marginTop: 12 }}>
             Trusted brands · Cash on delivery · Easy returns

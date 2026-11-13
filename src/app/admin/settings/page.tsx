@@ -33,6 +33,7 @@ type FormState = Required<
     | "website"
     | "openingHours"
     | "googleMapsUrl"
+    | "googleBusinessUrl"
     | "instagram"
     | "announcement"
   >
@@ -72,6 +73,7 @@ const DEFAULTS: FormState = {
   website: storeConfig.website || "www.rudrakshcollection.in",
   openingHours: storeConfig.openingHours,
   googleMapsUrl: storeConfig.googleMapsUrl,
+  googleBusinessUrl: "",
   instagram: storeConfig.instagram,
   announcement: "",
   freeShippingThreshold: String(storeConfig.freeShippingThreshold),
@@ -207,6 +209,7 @@ export default function AdminSettingsPage() {
         website: form.website.trim(),
         openingHours: form.openingHours.trim(),
         googleMapsUrl: parseGoogleMapsEmbedUrl(form.googleMapsUrl.trim(), form.address.trim()),
+        googleBusinessUrl: form.googleBusinessUrl.trim(),
         instagram: form.instagram.trim(),
         announcement: form.announcement.trim(),
         freeShippingThreshold: Number(form.freeShippingThreshold) || 0,
@@ -441,6 +444,20 @@ export default function AdminSettingsPage() {
             />
             <p className="text-xs text-muted-foreground">
               You can paste the entire &lt;iframe&gt; snippet from Google Maps — the embed URL is extracted automatically.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="google-business-url">Google Maps listing link</Label>
+            <Input
+              id="google-business-url"
+              placeholder="https://maps.app.goo.gl/…"
+              value={form.googleBusinessUrl}
+              onChange={(event) => setForm({ ...form, googleBusinessUrl: event.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              In Google Maps, open your shop → Share → Copy link. Search engines use it to connect this
+              website with your Google listing.
             </p>
           </div>
 

@@ -73,17 +73,19 @@ function HeroSection({ scrollProgress }: { scrollProgress: React.MutableRefObjec
       {/* Content */}
       <div className="relative z-10 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl">
-          <p data-reveal className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">
-            {storeConfig.category} — {storeConfig.location}
-          </p>
-          <h1 data-reveal className="font-serif text-5xl font-medium leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">
-            Little Styles.
-            <br />
-            <em className="text-rose-ink">Big Personalities.</em>
+          {/* The page's one heading names the shop, what it sells and where, so
+              searches for the shop's name or "clothing store Vadodara" match it. */}
+          <h1 data-reveal className="mb-4 font-sans text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">
+            {storeConfig.name} — Clothing for Men, Women &amp; Kids in {storeConfig.city}
           </h1>
+          <p data-reveal className="font-serif text-5xl font-medium leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">
+            Everyday Style.
+            <br />
+            <em className="text-rose-ink">For the Whole Family.</em>
+          </p>
           <p data-reveal className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
-            Discover comfortable, thoughtfully selected children&apos;s wear for everyday
-            adventures and special little moments.
+            Comfortable everyday clothes and festive ethnic wear for men, women and kids —
+            chosen with care, at fair prices.
           </p>
           <div data-reveal className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg" className="gap-2 rounded-full px-8">
@@ -255,9 +257,9 @@ function QualityStory() {
               Comfort They Forget They&apos;re Wearing
             </h2>
             <p className="mt-5 leading-relaxed text-muted-foreground">
-              Every piece in our collection is chosen with one thing in mind: how it feels on
-              little ones. Soft fabrics, thoughtful fits, and easy care — because childhood
-              should be about play, not fussing over clothes.
+              Every piece in our collection is chosen with one thing in mind: how it feels to
+              wear. Soft fabrics, thoughtful fits and easy care — for a busy workday, a family
+              function or a child who never sits still.
             </p>
             <div className="mt-8 grid grid-cols-3 gap-6">
               <div className="text-center">
@@ -283,7 +285,7 @@ function QualityStory() {
           <div data-parallax="0.15" className="relative aspect-[4/5] overflow-hidden rounded-lg bg-muted">
             <Image
               src="https://images.unsplash.com/photo-1596870230751-ebdfce98ec42?w=700&h=900&fit=crop"
-              alt="Children's clothing detail"
+              alt="Clothing detail"
               fill
               className="object-cover"
               sizes="(max-width: 1024px) 100vw, 50vw"
@@ -305,6 +307,14 @@ function StoreVisit() {
           <h2 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">See It, Feel It, Love It</h2>
           <p className="mt-4 text-muted-foreground">
             Visit our store in {storeConfig.location} to explore the full collection in person.
+          </p>
+          {/* Plain words about the shop: what search engines read to decide which
+              local searches it answers. Kept true and specific, not keyword-stuffed. */}
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+            {storeConfig.name} is a family clothing shop in {storeConfig.city}, Gujarat, near
+            Khodiyar Nagar on New VIP Road. We stock men&apos;s wear, women&apos;s wear, and boys&apos;,
+            girls&apos; and baby clothes — everyday, casual and festive ethnic outfits — from trusted
+            Indian brands. Order online with cash on delivery, or come in to try sizes.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">

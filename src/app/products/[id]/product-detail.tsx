@@ -28,7 +28,7 @@ import {
   maxQuantity,
   savingsPerUnit,
 } from "@/lib/merch";
-import { SizeGuide } from "@/components/size-guide";
+import { SizeGuide, sizeDepartmentFor } from "@/components/size-guide";
 import { BuyAssurance, StoreTrust } from "@/components/trust-strip";
 import { ProductReviews } from "@/components/product-reviews";
 import { RecentlyViewed, rememberViewed } from "@/components/recently-viewed";
@@ -326,7 +326,10 @@ function ProductDetailContent({ slug, initialProduct }: { slug: string; initialP
             <div id="size-picker">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Size</h2>
-                <SizeGuide whatsappLink={storeConfig.confirmed.whatsapp ? storeConfig.whatsappLink : null} />
+                <SizeGuide
+                  whatsappLink={storeConfig.confirmed.whatsapp ? storeConfig.whatsappLink : null}
+                  department={sizeDepartmentFor(product)}
+                />
               </div>
               <div className="flex flex-wrap gap-2">
                 {product.sizes.map((option) => (

@@ -14,12 +14,16 @@ import { StoreAnalytics } from "@/components/store-analytics";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Rudraksh Collection — Premium Children's Wear | Vadodara",
+    default: "Rudraksh Collection — Clothing Store for Men, Women & Kids in Vadodara",
     template: "%s | Rudraksh Collection",
   },
   description:
-    "Shop quality children's wear from trusted brands at Rudraksh Collection, Vadodara. Boys', girls', baby & toddler clothing. Free shipping on orders above ₹999.",
+    "Rudraksh Collection is a family clothing shop in Khodiyar Nagar, New VIP Road, Vadodara: everyday and ethnic wear for men, women and kids. Shop online with cash on delivery, or visit the store.",
   keywords: [
+    "clothing store Vadodara",
+    "men's wear",
+    "women's wear",
+    "ethnic wear",
     "children's wear",
     "kids clothing",
     "boys wear",
@@ -27,14 +31,19 @@ export const metadata: Metadata = {
     "baby clothes",
     "Vadodara",
     "Rudraksh Collection",
-    "kids fashion India",
+    "family clothing store",
   ],
   applicationName: storeConfig.name,
+  // Google Search Console's HTML-tag check. A *.vercel.app address cannot use
+  // the DNS method, so the code Search Console gives you goes in this variable.
+  ...(process.env.GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION.trim() } }
+    : {}),
   authors: [{ name: storeConfig.name }],
   openGraph: {
-    title: "Rudraksh Collection — Premium Children's Wear",
+    title: "Rudraksh Collection — Clothing for Men, Women & Kids",
     description:
-      "Quality children's wear from trusted brands. Shop now at Rudraksh Collection, Vadodara.",
+      "Everyday and ethnic wear for the whole family from trusted brands. Shop online or visit us in Vadodara.",
     type: "website",
     locale: "en_IN",
     siteName: storeConfig.name,
@@ -42,8 +51,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Rudraksh Collection — Premium Children's Wear",
-    description: "Quality children's wear from trusted brands, delivered across India.",
+    title: "Rudraksh Collection — Clothing for Men, Women & Kids",
+    description: "Everyday and ethnic wear for the whole family, delivered across India.",
   },
   robots: {
     index: true,
@@ -72,12 +81,20 @@ function storeJsonLd(settings: Awaited<ReturnType<typeof getStoreSettings>>) {
   const phone = own(settings?.phone, storeConfig.phone);
   const street = own(settings?.address, storeConfig.address);
   const instagram = settings?.instagram?.trim();
+  // A Google Maps *listing* link (not the embed URL used for the map widget).
+  const listing = (settings?.googleBusinessUrl ?? "").trim();
+  const mapsListing = /^https:\/\/(maps\.app\.goo\.gl|g\.page|(www\.)?google\.[a-z.]+\/maps)\//.test(listing) ? listing : undefined;
+  const profiles = [
+    ...(instagram && /^https:\/\/(www\.)?instagram\.com\//.test(instagram) ? [instagram] : []),
+    ...(mapsListing ? [mapsListing] : []),
+  ];
   return {
     "@context": "https://schema.org",
     "@type": "ClothingStore",
     name: storeConfig.name,
+    alternateName: ["Rudraksh Collection (Children Wear)", "Rudraksha Collection", "રુદ્રાક્ષ કલેક્શન"],
     description:
-      "Children's clothing store offering boys', girls' and baby wear from trusted Indian brands.",
+      "Family clothing store in Vadodara offering everyday and ethnic wear for men, women and children from trusted Indian brands.",
     url: siteUrl,
     logo: `${siteUrl}/icon.svg`,
     image: `${siteUrl}/opengraph-image`,
@@ -90,7 +107,8 @@ function storeJsonLd(settings: Awaited<ReturnType<typeof getStoreSettings>>) {
       addressCountry: "IN",
     },
     ...(settings?.openingHours?.trim() ? { openingHours: settings.openingHours.trim() } : {}),
-    ...(instagram && /^https:\/\/(www\.)?instagram\.com\//.test(instagram) ? { sameAs: [instagram] } : {}),
+    ...(profiles.length ? { sameAs: profiles } : {}),
+    ...(mapsListing ? { hasMap: mapsListing } : {}),
     currenciesAccepted: "INR",
     paymentAccepted: "Cash, UPI, Credit Card, Debit Card, Net Banking",
     areaServed: "India",

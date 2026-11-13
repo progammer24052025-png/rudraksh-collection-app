@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Our Story",
-  description: "How Rudraksh Collection, a children's wear shop in Vadodara, chooses comfortable, good-quality clothes for little ones.",
+  description: "How Rudraksh Collection, a family clothing shop in Vadodara, chooses comfortable, good-quality clothes for men, women and kids.",
   alternates: { canonical: "/story" },
 };
 

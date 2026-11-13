@@ -39,7 +39,7 @@ const SECTIONS: Array<{ title: string; items: Array<{ q: string; a: string }> }>
     items: [
       {
         q: "How do I choose the right size?",
-        a: "Every product page lists the available sizes. Children's wear is sized by age band (for example 4–5Y) and by months for babies. If your child is between sizes, we recommend the larger size for growing room — or message us and we will help you pick.",
+        a: "Every product page lists the available sizes. Kids' wear is sized by age band (for example 4–5Y) and by months for babies; men's and women's wear by S–XXL. The size guide on each product page has the measurements. If you are between sizes, we recommend the larger one — or message us and we will help you pick.",
       },
       {
         q: "Will the colour match the photos?",

@@ -285,7 +285,7 @@ export default function PrivacyPage() {
               Children&apos;s Privacy &amp; Parental Consent
             </h2>
             <p className="mt-4">
-              Although Rudraksh Collection specializes in children&apos;s and toddler apparel, our services
+              Although Rudraksh Collection sells children&apos;s and baby clothing as well as adult wear, our services
               and purchase capabilities are designed strictly for adult consumers (parents, guardians, or
               individuals aged 18 and older). We do not knowingly solicit or collect personal data directly
               from children under the age of 18 without parental consent. If we discover that personal data

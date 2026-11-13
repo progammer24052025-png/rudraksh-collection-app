@@ -46,9 +46,9 @@ export default function BrandsPage() {
         <main id="main" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="mb-10 max-w-2xl">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-sage-ink">Our Brands</p>
-            <h1 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Trusted Names in Children&apos;s Wear</h1>
+            <h1 className="mt-3 font-serif text-3xl font-medium sm:text-4xl">Trusted Names in Everyday Wear</h1>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              We carry a carefully selected range of children&apos;s clothing brands, chosen for
+              We carry a carefully selected range of clothing brands for men, women and kids, chosen for
               quality, comfort, and style.
             </p>
           </div>

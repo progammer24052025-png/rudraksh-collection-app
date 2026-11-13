@@ -11,8 +11,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const name = known?.name ?? clean.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   if (!name) return { title: "Brand", robots: { index: false, follow: true } };
   return {
-    title: `${name} Kids' Clothing`,
-    description: `Shop ${name} children's wear at Rudraksh Collection, Vadodara — boys', girls' and baby clothing with cash on delivery and easy returns.`,
+    title: `${name} Clothing`,
+    description: `Shop ${name} at Rudraksh Collection, Vadodara — clothing for men, women and kids with cash on delivery and easy returns.`,
     alternates: { canonical: `/brands/${clean}` },
   };
 }

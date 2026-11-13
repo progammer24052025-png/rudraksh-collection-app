@@ -223,6 +223,8 @@ export interface StoreSettings {
   website?: string;
   openingHours?: string;
   googleMapsUrl?: string;
+  /** The shop's Google Maps listing link (Share → Copy link), for search engines. */
+  googleBusinessUrl?: string;
   instagram?: string;
   freeShippingThreshold?: number;
   shippingFee?: number;

@@ -99,7 +99,7 @@ export interface SellerDetails {
 
 export const STORE_SELLER_DETAILS: SellerDetails = {
   storeName: "Rudraksh Collection",
-  tagline: "Children's Wear & Ethnic Studio",
+  tagline: "Everyday & Ethnic Wear for the Family",
   legalEntity: "Rudraksh Collection Retail",
   address: `125, Pancham Heights,
               Khodiyar Nagar,

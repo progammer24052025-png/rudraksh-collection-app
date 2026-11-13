@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Kids' Clothing Brands",
+  title: "Clothing Brands We Stock",
   description:
-    "Shop children's wear from trusted Indian brands — Macho, James & Harper, Bodycare, Comfort and more — at Rudraksh Collection, Vadodara.",
+    "Shop men's, women's and kids' wear from trusted Indian brands — Macho, James & Harper, Bodycare, Comfort and more — at Rudraksh Collection, Vadodara.",
   alternates: { canonical: "/brands" },
 };
 
