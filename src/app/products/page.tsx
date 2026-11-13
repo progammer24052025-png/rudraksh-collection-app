@@ -27,6 +27,7 @@ import { PageBreadcrumb } from "@/components/kit/page-breadcrumb";
 import { TagSearch } from "@/components/kit/tag-search";
 import { PageSpinner } from "@/components/kit/spinner";
 
+import { trackEvent } from "@/lib/track";
 // Display order for sizes; any other size found in the catalogue is appended after these.
 const SIZE_ORDER = ["0-6M", "6-12M", "12-18M", "18-24M", "2-3Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y"];
 
@@ -35,6 +36,9 @@ function ProductsContent() {
   const categoryParam = searchParams.get("category");
   const brandParam = searchParams.get("brand");
   const searchParam = searchParams.get("search");
+  useEffect(() => {
+    if (searchParam) trackEvent("search", { query: searchParam });
+  }, [searchParam]);
   const sizesParam = searchParams.get("sizes");
   const sortParam = searchParams.get("sort");
 

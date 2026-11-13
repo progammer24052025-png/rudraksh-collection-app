@@ -36,7 +36,10 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     label: "Dashboard",
     description: "Orders, revenue and stock at a glance",
     icon: LayoutDashboard,
-    tabs: [{ label: "Overview", href: "/admin/dashboard" }],
+    tabs: [
+      { label: "Overview", href: "/admin/dashboard" },
+      { label: "Analytics", href: "/admin/analytics" },
+    ],
   },
   {
     key: "catalog",

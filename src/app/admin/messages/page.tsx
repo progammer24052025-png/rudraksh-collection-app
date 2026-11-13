@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Mail, Phone } from "lucide-react";
+import { Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
 import { subscribeMessages, updateValue } from "@/lib/firebase";
 import type { ContactMessage } from "@/lib/types";
 
+import { SealLoader } from "@/components/kit/brand-mark";
 export default function AdminMessagesPage() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +34,7 @@ export default function AdminMessagesPage() {
 
         {loading ? (
           <div className="flex justify-center py-20 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <SealLoader size={40} showLabel={false} />
           </div>
         ) : messages.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-10 text-center text-muted-foreground">

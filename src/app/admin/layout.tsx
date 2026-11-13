@@ -2,9 +2,10 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+
 import { AdminProvider, useAdmin } from "@/lib/admin-context";
 
+import { SealLoader } from "@/components/kit/brand-mark";
 function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -22,7 +23,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <SealLoader size={56} showLabel={false} />
       </div>
     );
   }
@@ -30,7 +31,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   if (!hasAccess && !isLoginPage) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <SealLoader size={56} showLabel={false} />
       </div>
     );
   }

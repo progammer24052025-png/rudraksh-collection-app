@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Clock, Loader2, Mail, MapPin, MessageCircle, Phone, Send } from "lucide-react";
+import { Clock, Mail, MapPin, MessageCircle, Phone, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -14,6 +14,7 @@ import { useStore } from "@/lib/store-context";
 import { useAuth } from "@/lib/auth-context";
 import { sendContactMessage } from "@/lib/firebase";
 
+import { Spinner } from "@/components/ui/spinner";
 const QUICK_LINKS = [
   { label: "Track Order", href: "/track-order", detail: "Check your delivery status" },
   { label: "Return Policy", href: "/returns", detail: "7-day easy returns" },
@@ -153,7 +154,7 @@ export default function ContactPage() {
 
                     <Button type="submit" disabled={sending} className="w-full sm:w-auto">
                       {sending ? (
-                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
+                        <><Spinner className="mr-2 h-4 w-4" /> Sending…</>
                       ) : (
                         <><Send className="mr-2 h-4 w-4" /> Send message</>
                       )}

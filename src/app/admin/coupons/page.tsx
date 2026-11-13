@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Save, Ticket, Trash2 } from "lucide-react";
+import { Plus, Save, Ticket, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminNav } from "@/components/admin-nav";
@@ -13,6 +13,7 @@ import { deleteCoupon, saveCoupon, subscribeCoupons } from "@/lib/firebase";
 import { validateCoupon } from "@/lib/pricing";
 import type { Coupon, CouponType } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
 type Draft = {
   code: string;
   title: string;
@@ -234,7 +235,7 @@ export default function AdminCouponsPage() {
 
               <div className="flex gap-2 pt-1">
                 <Button onClick={() => void submit()} disabled={saving} className="flex-1">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                   <span className="ml-1.5">{editing ? "Update" : "Create"}</span>
                 </Button>
                 {editing ? (

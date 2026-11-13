@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag, User, Search, Menu, X, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandSeal } from "@/components/kit/brand-mark";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
 import { useStore } from "@/lib/store-context";
@@ -103,8 +104,10 @@ export function Header() {
           </Sheet>
         </div>
 
-        <Link href="/" className="flex items-center gap-2.5">
-          <span className="font-serif text-xl font-semibold tracking-tight sm:text-2xl">
+        <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-2.5" aria-label="Rudraksh Collection, home">
+          <BrandSeal size={28} className="shrink-0 sm:hidden" />
+          <BrandSeal size={34} className="hidden shrink-0 sm:block" />
+          <span className="truncate font-serif text-lg font-semibold tracking-tight sm:text-2xl">
             Rudraksh Collection
           </span>
         </Link>
@@ -216,7 +219,10 @@ function MobileNav() {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-border p-4">
-        <span className="font-serif text-lg font-semibold">Rudraksh Collection</span>
+        <span className="flex items-center gap-2.5">
+          <BrandSeal size={30} />
+          <span className="font-serif text-lg font-semibold">Rudraksh Collection</span>
+        </span>
       </div>
       <nav className="flex-1 overflow-y-auto p-4">
         <div className="space-y-1">

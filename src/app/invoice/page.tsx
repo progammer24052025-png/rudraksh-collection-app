@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, PackageSearch } from "lucide-react";
+import { ArrowLeft, PackageSearch } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { findOrderByNumber } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import type { Order } from "@/lib/types";
 
+import { SealLoader } from "@/components/kit/brand-mark";
 function InvoiceContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get("order")?.trim().toUpperCase();
@@ -47,7 +48,7 @@ function InvoiceContent() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SealLoader size={56} showLabel={false} />
         <p className="mt-3 text-sm text-muted-foreground">Generating tax invoice…</p>
       </div>
     );
@@ -146,7 +147,7 @@ export default function InvoicePage() {
         <Suspense
           fallback={
             <div className="flex min-h-[50vh] items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <SealLoader size={56} showLabel={false} />
             </div>
           }
         >

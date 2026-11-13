@@ -23,6 +23,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import { SHIPPED_FOLLOW_UP_DAYS, resolveAutomation } from "@/lib/automation";
 import { announceNewProducts, type AnnounceResult } from "@/lib/server/announce";
+import { rollupAnalytics } from "@/lib/server/analytics-rollup";
 import { dailyDigestEmail, type DigestSection } from "@/lib/server/email-templates";
 import { isSameOrigin } from "@/lib/server/http";
 import { callerFrom } from "@/lib/server/id-token";
@@ -62,7 +63,7 @@ type RunResult = {
   emailed: boolean;
   headline: string;
   counts: Record<string, number>;
-  cleaned: { pendingPayments: number; rateLimits: boolean };
+  cleaned: { pendingPayments: number; rateLimits: boolean; analyticsDays: number };
   /** The new-arrival mailing, when this run did one. */
   newArrivals: AnnounceResult | null;
 };
@@ -216,6 +217,11 @@ async function run(options: { forceEmail: boolean; announce: boolean }): Promise
     }
   }
   // Counters only matter for minutes; clearing them once a day keeps the node small.
+  // Sum yesterday's visitor hits into one record and drop the raw hits.
+  const analytics = await rollupAnalytics(now).catch((error) => {
+    console.error("Analytics roll-up failed:", error);
+    return { days: 0, pruned: 0 };
+  });
   const cleanedRateLimits = await adminDelete("rateLimits").then(
     () => true,
     () => false,
@@ -263,7 +269,7 @@ async function run(options: { forceEmail: boolean; announce: boolean }): Promise
       soldOut: soldOut.length,
       newMessages,
     },
-    cleaned: { pendingPayments: cleanedPayments, rateLimits: cleanedRateLimits },
+    cleaned: { pendingPayments: cleanedPayments, rateLimits: cleanedRateLimits, analyticsDays: analytics.days },
   };
 }
 

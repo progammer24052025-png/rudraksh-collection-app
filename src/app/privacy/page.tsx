@@ -240,6 +240,15 @@ export default function PrivacyPage() {
                   If your account has an email address, we may email you when new products are added — at most once a day. This is switched on by default. You can turn it off at any time from Account → Profile, or with the unsubscribe link in every such email. Emails about your own orders are sent regardless.
                 </p>
               </div>
+
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <h3 className="font-medium text-foreground text-xs flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5 text-primary" /> Anonymous Usage Statistics
+                </h3>
+                <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                  We count which pages are visited, which site a visit came from and the device type, both in our own statistics and with Vercel Web Analytics and Speed Insights (which also measure how fast pages load). None of these use cookies or store your IP address, name or order numbers, and only our team can see the totals. If your browser sends a Do Not Track or Global Privacy Control signal, our own statistics skip you entirely.
+                </p>
+              </div>
             </div>
           </div>
 

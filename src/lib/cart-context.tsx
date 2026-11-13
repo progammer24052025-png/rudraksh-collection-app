@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { effectivePrice } from "./pricing";
 import type { Product, CartItem } from "./store-data";
 
+import { trackEvent } from "./track";
 type CartContextType = {
   items: CartItem[];
   addItem: (productId: string, size: string, color: string, quantity?: number) => void;
@@ -45,6 +46,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items, isHydrated]);
 
   const addItem = useCallback((productId: string, size: string, color: string, quantity = 1) => {
+    trackEvent("add_to_cart");
     setItems((prev) => {
       const existing = prev.find(
         (item) => item.productId === productId && item.size === size && item.color === color

@@ -17,8 +17,6 @@ export const storeConfig = {
   state: "Gujarat",
   cityStatePincode: "Gujarat - 390019",
   country: "India",
-  googleRating: 4.84,
-  googleReviewCount: null as number | null,
 
   // ── Contact & Legal details (edit in Admin → Settings) ──
   address: `125, Pancham Heights,

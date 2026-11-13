@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Download, Loader2, Scissors, Trash2 } from "lucide-react";
+import { Check, Download, Scissors, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { slugifyName } from "@/components/kit/image-dropzone";
 import { cutoutFor, type CutoutResult } from "@/lib/cutout";
 
+import { Spinner } from "@/components/ui/spinner";
 const RAIL_BACKDROP = "linear-gradient(to bottom, #f7f4ed, #e9e4d6)";
 
 /**
@@ -83,7 +84,7 @@ export function RailCutoutField({
           disabled={busy || !source}
           className="border-border bg-background"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Scissors className="h-4 w-4" aria-hidden />}
+          {busy ? <Spinner className="h-4 w-4" /> : <Scissors className="h-4 w-4" aria-hidden />}
           {busy ? "Separating…" : "Preview the cut-out"}
         </Button>
         {value ? (

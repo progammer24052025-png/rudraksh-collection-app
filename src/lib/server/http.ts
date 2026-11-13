@@ -37,7 +37,7 @@ const buckets = new Map<string, Bucket>();
 export type RateResult = { ok: true } | { ok: false; retryAfter: number };
 
 /** Per-instance counter: the fallback when the shared store is unavailable. */
-function memoryRateLimit(key: string, limit: number, windowMs: number): RateResult {
+export function memoryRateLimit(key: string, limit: number, windowMs: number): RateResult {
   const now = Date.now();
 
   if (buckets.size > 5000) {

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, FileText, Loader2, PackageSearch, Search } from "lucide-react";
+import { Check, FileText, PackageSearch, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -15,6 +15,8 @@ import { findOrderForTracking, formatPrice } from "@/lib/firebase";
 import { ORDER_TIMELINE, statusLabel } from "@/lib/orders";
 import type { OrderTracking } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 function TrackOrderInner() {
   const searchParams = useSearchParams();
   const { user, profile } = useAuth();
@@ -109,7 +111,7 @@ function TrackOrderInner() {
         </div>
         <Button type="submit" className="mt-4 w-full sm:w-auto" disabled={loading}>
           {loading ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Looking up…</>
+            <><Spinner className="mr-2 h-4 w-4" /> Looking up…</>
           ) : (
             <><Search className="mr-2 h-4 w-4" /> Track order</>
           )}
@@ -213,7 +215,7 @@ export default function TrackOrderPage() {
         <Suspense
           fallback={
             <div className="flex justify-center py-24">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <SealLoader size={40} showLabel={false} />
             </div>
           }
         >

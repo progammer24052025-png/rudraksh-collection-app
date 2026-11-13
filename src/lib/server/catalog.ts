@@ -5,7 +5,7 @@
  * previews do not hit the database on every request.
  */
 import { DB_ROOT } from "@/lib/server/rtdb-admin";
-import type { Product } from "@/lib/types";
+import type { Product, StoreSettings } from "@/lib/types";
 
 const REVALIDATE_SECONDS = 300;
 
@@ -52,4 +52,9 @@ export async function getActiveProducts(): Promise<Product[]> {
   return Object.entries(all)
     .map(([id, product]) => ({ ...product, id: product.id || id }))
     .filter((product) => product && product.status === "active" && product.slug);
+}
+
+/** The store's public settings (contact details, hours), for page metadata. */
+export async function getStoreSettings(): Promise<StoreSettings | null> {
+  return get<StoreSettings>("settings");
 }

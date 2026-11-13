@@ -179,6 +179,10 @@
       "pincodeGeo": {
         ".read": false,
         ".write": false
+      },
+      "analytics": {
+        ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
+        ".write": false
       }
     }
   }

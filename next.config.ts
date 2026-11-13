@@ -92,7 +92,16 @@ const nextConfig: NextConfig = {
     remotePatterns: imageHosts.map((hostname) => ({ protocol: 'https' as const, hostname })),
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // Pages that belong to one customer or to the team: never in search results,
+    // even if a link to them is posted somewhere public.
+    const privatePages = ["/admin", "/admin/:path*", "/account", "/checkout", "/invoice", "/cart", "/wishlist", "/track-order"];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      ...privatePages.map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+      })),
+    ];
   },
   async redirects() {
     return [

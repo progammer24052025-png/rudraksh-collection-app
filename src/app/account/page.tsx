@@ -10,7 +10,6 @@ import {
   Edit2,
   FileText,
   Heart,
-  Loader2,
   LogOut,
   Mail,
   MapPin,
@@ -56,6 +55,8 @@ import {
   subscribeActivity,
 } from "@/lib/firebase";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 const ORDER_STEPS: Array<{ key: Order["order_status"]; label: string }> = [
   { key: "placed", label: "Placed" },
   { key: "confirmed", label: "Confirmed" },
@@ -300,7 +301,7 @@ function LoginScreen() {
                 <Button onClick={handleSendOTP} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
                   {busy === "otp" ? (
                     <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Sending OTP…
+                      <Spinner className="h-4 w-4" /> Sending OTP…
                     </span>
                   ) : (
                     <><Phone className="mr-2 h-4 w-4" /> Send OTP</>
@@ -317,7 +318,7 @@ function LoginScreen() {
                 </div>
 
                 <Button variant="outline" onClick={handleGoogle} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
-                  {busy === "google" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
+                  {busy === "google" ? <Spinner className="mr-2 h-4 w-4" /> : <GoogleIcon />}
                   <span className="ml-2">Google</span>
                 </Button>
               </motion.div>
@@ -348,7 +349,7 @@ function LoginScreen() {
 
                 <Button onClick={handleVerify} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
                   {busy === "verify" ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…</>
+                    <><Spinner className="mr-2 h-4 w-4" /> Verifying…</>
                   ) : (
                     "Verify & Sign In"
                   )}
@@ -442,7 +443,7 @@ function PhoneVerificationModal({ open, onClose }: { open: boolean; onClose: () 
                 className="w-full"
                 disabled={busy}
               >
-                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</> : "Send OTP"}
+                {busy ? <><Spinner className="mr-2 h-4 w-4" /> Sending…</> : "Send OTP"}
               </Button>
             </>
           ) : (
@@ -474,7 +475,7 @@ function PhoneVerificationModal({ open, onClose }: { open: boolean; onClose: () 
                 className="w-full"
                 disabled={busy}
               >
-                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…</> : "Verify"}
+                {busy ? <><Spinner className="mr-2 h-4 w-4" /> Verifying…</> : "Verify"}
               </Button>
             </>
           )}
@@ -508,7 +509,7 @@ function OrdersTab() {
 
       {orders === null ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <SealLoader size={40} showLabel={false} />
         </div>
       ) : orders.length === 0 ? (
         <div className="flex flex-col items-center py-12 text-center">
@@ -825,7 +826,7 @@ function AccountContent() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <SealLoader size={56} showLabel={false} />
       </div>
     );
   }

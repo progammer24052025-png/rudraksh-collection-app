@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Phone, Mail, MapPin, Instagram, Clock, MessageCircle } from "lucide-react";
 import { useStore } from "@/lib/store-context";
+import { BrandSeal } from "@/components/kit/brand-mark";
 import { brands as fallbackBrands } from "@/lib/config";
-import { subscribeBrands } from "@/lib/firebase";
+import { subscribeAdminRecord, subscribeBrands } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
 import type { Brand } from "@/lib/types";
 
 const SHOP_LINKS = [
@@ -29,6 +31,22 @@ const CARE_LINKS = [
 
 export function Footer() {
   const store = useStore();
+  // The Admin link is shown only to signed-in team members. The admin pages
+  // check access themselves; hiding the link just keeps it out of shoppers' way.
+  const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const uid = user?.uid ?? null;
+  useEffect(() => {
+    if (!uid) {
+      setIsAdmin(false);
+      return;
+    }
+    try {
+      return subscribeAdminRecord(uid, (record) => setIsAdmin(Boolean(record)));
+    } catch {
+      setIsAdmin(false);
+    }
+  }, [uid]);
   const [brandsList, setBrandsList] = useState<Brand[]>([]);
 
   useEffect(() => {
@@ -45,7 +63,10 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div>
-            <span className="font-serif text-xl font-semibold">{store.name}</span>
+            <Link href="/" className="inline-flex items-center gap-3" aria-label={`${store.name}, home`}>
+              <BrandSeal size={44} />
+              <span className="font-serif text-xl font-semibold">{store.name}</span>
+            </Link>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               {store.tagline}. Quality children&apos;s wear from trusted brands, carefully selected
               for little ones in {store.city} and across India.
@@ -137,7 +158,9 @@ export function Footer() {
               <Link href="/terms" className="text-muted-foreground hover:text-foreground">Terms</Link>
               <Link href="/shipping" className="text-muted-foreground hover:text-foreground">Shipping</Link>
               <Link href="/returns" className="text-muted-foreground hover:text-foreground">Returns</Link>
-              <Link href="/admin" className="text-muted-foreground hover:text-foreground">Admin</Link>
+              {isAdmin ? (
+                <Link href="/admin/dashboard" className="text-muted-foreground hover:text-foreground">Admin</Link>
+              ) : null}
             </div>
           </div>
         </div>

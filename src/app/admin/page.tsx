@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
+import { Lock, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { useAdmin } from "@/lib/admin-context";
 import { ADMIN_EMAIL } from "@/lib/firebase";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 export default function AdminLoginPage() {
   const router = useRouter();
   const {
@@ -58,7 +60,7 @@ export default function AdminLoginPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <SealLoader size={56} showLabel={false} />
       </div>
     );
   }
@@ -66,7 +68,7 @@ export default function AdminLoginPage() {
   if (isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <SealLoader size={56} showLabel={false} />
       </div>
     );
   }
@@ -168,7 +170,7 @@ export default function AdminLoginPage() {
 
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</>
+              <><Spinner className="mr-2 h-4 w-4" /> Signing in…</>
             ) : (
               "Sign In"
             )}

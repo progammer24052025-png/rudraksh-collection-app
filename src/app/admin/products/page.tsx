@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "@/components/store-image";
-import { Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/admin-nav";
@@ -24,6 +24,8 @@ import {
 } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,7 +151,7 @@ export default function AdminProductsPage() {
 
         {loading ? (
           <div className="flex justify-center py-20 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <SealLoader size={40} showLabel={false} />
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -218,7 +220,7 @@ export default function AdminProductsPage() {
                           disabled={deleting === product.id}
                         >
                           {deleting === product.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Spinner className="h-4 w-4" />
                           ) : (
                             <Trash2 className="h-4 w-4" />
                           )}

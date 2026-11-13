@@ -37,6 +37,7 @@ import {
 } from "./firebase";
 import { describeAuthError } from "./auth-context";
 
+import { setAdminDevice } from "./track";
 type AdminContextValue = {
   user: User | null;
   isAdmin: boolean;
@@ -152,6 +153,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         const authorised = Boolean(record);
         setIsAdmin(authorised);
+        // The owner's own browsing is kept out of the store analytics.
+        if (authorised) setAdminDevice(true);
         if (authorised) {
           setPending(false);
           setNeedsVerification(false);
