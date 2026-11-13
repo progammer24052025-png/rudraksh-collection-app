@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "@/components/store-image";
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { ArrowRight, MapPin, Phone, Clock, Star, Sparkles, Heart, Truck, Shield, RotateCcw } from "lucide-react";
+import { ArrowRight, MapPin, Phone, Clock, Sparkles, Heart, Truck, Shield, RotateCcw } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ProductCard } from "@/components/product-card";
@@ -19,6 +19,8 @@ import { BrandCarousel } from "@/components/brand-carousel";
 import { ClothingRailHero, useClothItems, type RailGarment } from "@/components/ui/product-rail-gallery";
 import { subscribeBanners, isBannerLive } from "@/lib/firebase";
 import type { Banner } from "@/lib/types";
+import type { GoogleRating } from "@/lib/server/google-rating";
+import { StarRating } from "@/components/star-rating";
 
 /**
  * three.js is ~600 kB before it draws anything. Loading it dynamically keeps
@@ -333,13 +335,12 @@ function StoreVisit() {
   );
 }
 
-function TrustBar() {
+function TrustBar({ googleRating }: { googleRating: GoogleRating | null }) {
   const storeConfig = useStore();
   const items = [
     { icon: Truck, label: "Free Shipping", detail: `Orders above ₹${storeConfig.freeShippingThreshold}` },
     { icon: RotateCcw, label: "Easy Returns", detail: `${storeConfig.returnWindowDays}-day return policy` },
     { icon: Shield, label: "Secure Checkout", detail: storeConfig.codAvailable ? "COD & online payment" : "Online payment" },
-    { icon: Star, label: `${storeConfig.googleRating} Rating`, detail: "Google reviews" },
   ];
 
   return (
@@ -357,13 +358,44 @@ function TrustBar() {
               </div>
             </div>
           ))}
+          {googleRating ? (
+            // Live from Google, refreshed every couple of hours; links to the reviews.
+            <a
+              href={googleRating.mapsUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:border-foreground/30"
+              aria-label={`Rated ${googleRating.rating.toFixed(1)} out of 5 from ${googleRating.count} Google reviews. Read them on Google Maps.`}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-base font-semibold">
+                {googleRating.rating.toFixed(1)}
+              </div>
+              <div>
+                <StarRating value={googleRating.rating} size={13} />
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {googleRating.count.toLocaleString("en-IN")} reviews on{" "}
+                  <span className="font-medium text-foreground">Google Maps</span>
+                </p>
+              </div>
+            </a>
+          ) : (
+            <Link href="/visit" className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                <MapPin className="h-5 w-5 text-foreground/60" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Visit our store</p>
+                <p className="text-xs text-muted-foreground">{storeConfig.city} — come and try sizes</p>
+              </div>
+            </Link>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-function HomePageContent() {
+function HomePageContent({ googleRating }: { googleRating: GoogleRating | null }) {
   const scrollProgress = useRef(0);
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -392,7 +424,7 @@ function HomePageContent() {
           <FeaturedProducts products={products} />
           <QualityStory />
           <StoreVisit />
-          <TrustBar />
+          <TrustBar googleRating={googleRating} />
         </main>
       </ScrollStory>
       <Footer />
@@ -400,6 +432,6 @@ function HomePageContent() {
   );
 }
 
-export function HomeView() {
-  return <HomePageContent />;
+export function HomeView({ googleRating = null }: { googleRating?: GoogleRating | null }) {
+  return <HomePageContent googleRating={googleRating} />;
 }

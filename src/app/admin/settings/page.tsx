@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { parseGoogleMapsEmbedUrl } from "@/lib/maps";
@@ -17,6 +17,8 @@ import { DEFAULT_BEYOND_FEE, DEFAULT_SLABS, MAX_SLABS, normalizeShipping } from 
 import { storeConfig } from "@/lib/config";
 import type { StoreSettings } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 type FormState = Required<
   Pick<
     StoreSettings,
@@ -338,7 +340,7 @@ export default function AdminSettingsPage() {
       <div className="min-h-screen">
         <AdminNav />
         <div className="flex h-96 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <SealLoader size={56} showLabel={false} />
         </div>
       </div>
     );
@@ -748,11 +750,11 @@ export default function AdminSettingsPage() {
               </div>
               <div className="flex flex-wrap items-end gap-2">
                 <Button type="button" variant="outline" onClick={sendSummaryNow} disabled={sendingSummary}>
-                  {sendingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {sendingSummary ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   Send summary now
                 </Button>
                 <Button type="button" variant="outline" onClick={announceNow} disabled={announcing}>
-                  {announcing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {announcing ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   Announce new arrivals now
                 </Button>
               </div>
@@ -768,7 +770,7 @@ export default function AdminSettingsPage() {
 
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
+              <><Spinner className="mr-2 h-4 w-4" /> Saving…</>
             ) : (
               <><Save className="mr-2 h-4 w-4" /> Save Settings</>
             )}

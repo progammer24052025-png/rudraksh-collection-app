@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Image as ImageIcon, Loader2, Megaphone, Save, Trash2 } from "lucide-react";
+import { Image as ImageIcon, Megaphone, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminNav } from "@/components/admin-nav";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/firebase";
 import type { Banner, BannerPlacement, Product } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
 type Draft = {
   id: string;
   title: string;
@@ -280,7 +281,7 @@ export default function AdminBannersPage() {
 
               <div className="flex gap-2 pt-1">
                 <Button onClick={() => void submit()} disabled={saving} className="flex-1">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                   <span className="ml-1.5">Save banner</span>
                 </Button>
                 {draft.id ? (

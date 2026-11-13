@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Loader2 } from "lucide-react";
+import { BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { StarInput, StarRating } from "@/components/star-rating";
@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-context";
 import { readValue, subscribeUserOrders } from "@/lib/firebase";
 import type { Order, Review } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
 const formatDate = (iso: string) => {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
@@ -192,7 +193,7 @@ export function ProductReviews({ productId }: { productId: string }) {
               />
               <div className="mt-3 flex gap-2">
                 <Button onClick={submit} disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post review"}
+                  {saving ? <Spinner className="h-4 w-4" /> : "Post review"}
                 </Button>
                 <Button variant="ghost" onClick={() => setFormOpen(false)} disabled={saving}>
                   Cancel

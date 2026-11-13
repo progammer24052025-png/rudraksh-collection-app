@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
+import { Check, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/admin-nav";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/firebase";
 import type { AdminRecord } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 export default function AdminTeamPage() {
   const { user } = useAdmin();
   const [admins, setAdmins] = useState<AdminRecord[]>([]);
@@ -101,7 +103,7 @@ export default function AdminTeamPage() {
 
         {loading ? (
           <div className="flex justify-center py-16 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <SealLoader size={40} showLabel={false} />
           </div>
         ) : (
           <div className="space-y-8">
@@ -137,7 +139,7 @@ export default function AdminTeamPage() {
                       <div className="flex gap-2">
                         <Button size="sm" onClick={() => approve(request)} disabled={busy === request.uid}>
                           {busy === request.uid ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <Spinner className="h-3.5 w-3.5" />
                           ) : (
                             <><Check className="mr-1.5 h-3.5 w-3.5" /> Approve</>
                           )}

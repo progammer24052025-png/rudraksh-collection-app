@@ -29,15 +29,14 @@ import {
   isSecureCheckout,
 } from "@/lib/server/rtdb-admin";
 import { isMailConfigured, sendMail } from "@/lib/server/smtp";
-import type { Order, OrderItem, OrderStatusEvent } from "@/lib/types";
+import { cancellationMoney } from "@/lib/cancellation";
+import type { Order, OrderStatusEvent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 // `node:tls` powers the SMTP connection, so this route must not run on Edge.
 export const runtime = "nodejs";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
-const lineValue = (item: OrderItem) =>
-  Math.max(0, Math.round(Number(item.price) || 0)) * Math.max(0, Math.floor(Number(item.quantity) || 0));
 
 type Body = { orderId?: unknown; itemIndexes?: unknown; reason?: unknown; restock?: unknown };
 
@@ -94,27 +93,12 @@ export async function POST(request: Request) {
     const names = cancelledNow.map((item) => `${item.name} × ${item.quantity}`).join(", ");
 
     // ── Money ───────────────────────────────────────────────────────────────
-    // Totals follow the items that are still on the order. The coupon discount
-    // shrinks in proportion; the delivery charge stays as it was charged.
-    const oldSubtotal = Math.max(0, Number(order.subtotal) || 0);
-    const oldDiscount = Math.max(0, Number(order.discount) || 0);
-    const shipping = Math.max(0, Number(order.shipping) || 0);
+    // See src/lib/cancellation.ts (shared with the tests).
+    const money = cancellationMoney(order, cancelledNow, remaining.length);
+    const { subtotal, discount, taxableBase, tax } = money;
+    const newTotal = money.total;
     const oldTotal = Math.max(0, Number(order.total) || 0);
-    const rate = Math.max(0, Number(order.tax_rate) || 0);
-    // Inclusive pricing: tax is inside the price, so the total has no tax added.
-    const taxInclusive = Math.abs(oldSubtotal - oldDiscount + shipping - oldTotal) < 1;
-
-    const cancelledValue = cancelledNow.reduce((sum, item) => sum + lineValue(item), 0);
-    const subtotal = Math.max(0, oldSubtotal - cancelledValue);
-    const discount = oldSubtotal > 0 ? Math.round((oldDiscount * subtotal) / oldSubtotal) : 0;
-    const taxableBase = Math.max(0, subtotal - discount);
-    const tax = taxInclusive
-      ? Math.round(taxableBase - taxableBase / (1 + rate))
-      : Math.round(taxableBase * rate);
-    const newTotal = taxInclusive ? taxableBase + shipping : taxableBase + tax + shipping;
-
-    // A full cancellation hands back everything paid, delivery included.
-    const refundNow = fullCancel ? oldTotal : Math.max(0, oldTotal - newTotal);
+    const refundNow = money.refund;
     const refundDue = Math.max(0, Number(order.refund_due) || 0) + (wasPaid ? refundNow : 0);
 
     const history: OrderStatusEvent[] = [

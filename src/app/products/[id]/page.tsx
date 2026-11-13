@@ -89,6 +89,28 @@ function productJsonLd(product: Product, slug: string) {
   };
 }
 
+/** Home › Shop › Collection › Product, so search results show the trail. */
+function breadcrumbJsonLd(product: Product, slug: string) {
+  const items = [
+    { name: "Home", url: siteUrl },
+    { name: "Shop", url: `${siteUrl}/products` },
+    ...(product.category_slug && product.category_name
+      ? [{ name: product.category_name, url: `${siteUrl}/products?category=${encodeURIComponent(product.category_slug)}` }]
+      : []),
+    { name: product.name, url: `${siteUrl}/products/${slug}` },
+  ];
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params;
   const product = await getProductBySlug(id);
@@ -97,11 +119,13 @@ export default async function ProductPage({ params }: PageProps) {
 
   return (
     <>
-      {structured && (
+      {structured && product && (
         <script
           type="application/ld+json"
           // `<` is escaped so product text can never close the script tag.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structured).replace(/</g, "\\u003c") }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify([structured, breadcrumbJsonLd(product, product.slug || id)]).replace(/</g, "\\u003c"),
+          }}
         />
       )}
       <ProductDetailView slug={id} initialProduct={structured ? product : null} />

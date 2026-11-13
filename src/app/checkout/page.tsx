@@ -9,7 +9,6 @@ import {
   Banknote,
   Check,
   Shield,
-  Loader2,
   FileText,
   Download,
   Copy,
@@ -49,6 +48,9 @@ import { AnimatedTicket, ConfettiExplosion } from "@/components/ui/ticket-confir
 import { SignInForm } from "@/components/kit/sign-in-form";
 import { TaxInvoice, type InvoiceData } from "@/components/kit/tax-invoice";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
+import { trackEvent } from "@/lib/track";
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5">
@@ -195,6 +197,14 @@ function CheckoutContent() {
   const [onlineAvailable, setOnlineAvailable] = useState(false);
   const [paymentIssue, setPaymentIssue] = useState<string | null>(null);
   const paid = useRef(false);
+
+  // Counted once per visit to checkout with something in the bag.
+  const checkoutTracked = useRef(false);
+  useEffect(() => {
+    if (checkoutTracked.current || !isHydrated || items.length === 0) return;
+    checkoutTracked.current = true;
+    trackEvent("begin_checkout");
+  }, [isHydrated, items.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -363,7 +373,7 @@ function CheckoutContent() {
   if (loading) {
     return (
       <div className="mx-auto max-w-lg px-4 py-24 text-center">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+        <SealLoader size={56} showLabel={false} className="mx-auto" />
         <p className="mt-4 text-sm text-muted-foreground">Checking account status...</p>
       </div>
     );
@@ -476,6 +486,7 @@ function CheckoutContent() {
       });
 
       const handleSuccess = (num: string, p?: RazorpaySuccess) => {
+        trackEvent("purchase");
         const isPaid = Boolean(p);
         setCompletedOrder({
           orderNumber: num,
@@ -1188,7 +1199,7 @@ function CheckoutContent() {
                   onClick={handlePlaceOrder} disabled={isProcessing}
                 >
                   {isProcessing ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {paymentMethod === "razorpay" ? "Waiting for payment..." : "Placing Order..."}</>
+                    <><Spinner className="mr-2 h-4 w-4" /> {paymentMethod === "razorpay" ? "Waiting for payment..." : "Placing Order..."}</>
                   ) : paymentMethod === "razorpay" ? (
                     `Pay ${formatPrice(grandTotal)}`
                   ) : (
@@ -1272,7 +1283,7 @@ function CheckoutContent() {
                     onClick={() => void applyCoupon()}
                     disabled={couponBusy || !couponInput.trim()}
                   >
-                    {couponBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                    {couponBusy ? <Spinner className="h-4 w-4" /> : "Apply"}
                   </Button>
                 </div>
               )}

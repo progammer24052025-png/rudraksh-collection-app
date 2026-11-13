@@ -17,7 +17,6 @@ import {
   Layers,
   ArrowUpDown,
   RefreshCw,
-  Loader2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +47,8 @@ import { activeCategories, detectBrandCategories, sortCategories } from "@/lib/c
 import { brands as defaultBrands } from "@/lib/config";
 import type { Brand, Category, Product } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 type BrandDraft = {
   id: string;
   name: string;
@@ -408,7 +409,7 @@ export default function AdminBrandsPage() {
         {/* Brand Grid / List */}
         {loading ? (
           <div className="mt-12 flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <SealLoader size={56} showLabel={false} />
           </div>
         ) : filteredBrands.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-border p-12 text-center bg-card">
@@ -801,7 +802,7 @@ export default function AdminBrandsPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                {saving && <Spinner className="mr-1.5 h-4 w-4" />}
                 {draft.id ? "Save Changes" : "Create Brand"}
               </Button>
             </DialogFooter>

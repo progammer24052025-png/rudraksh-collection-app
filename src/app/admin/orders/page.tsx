@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, RefreshCw, Check, FileText, ChevronsRight, XCircle } from "lucide-react";
+import { Search, RefreshCw, Check, FileText, ChevronsRight, XCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, statusLabel } from "@/l
 import { nextOrderStep } from "@/lib/automation";
 import type { Order, OrderStatus, PaymentStatus } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,7 +185,7 @@ export default function AdminOrdersPage() {
             {bulkStep && filtered.length > 1 && (
               <Button variant="outline" onClick={advanceAll} disabled={bulkBusy}>
                 {bulkBusy ? (
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  <Spinner className="mr-1.5 h-4 w-4" />
                 ) : (
                   <ChevronsRight className="mr-1.5 h-4 w-4" />
                 )}
@@ -204,7 +206,7 @@ export default function AdminOrdersPage() {
 
         {loading ? (
           <div className="flex justify-center py-20 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <SealLoader size={40} showLabel={false} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-20 text-center text-muted-foreground">
@@ -225,7 +227,7 @@ export default function AdminOrdersPage() {
                       <span className={`rounded-full px-2 py-0.5 text-xs ${paymentLabel(order.payment_status).className}`}>
                         {paymentLabel(order.payment_status).label}
                       </span>
-                      {busyId === order.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                      {busyId === order.id && <Spinner className="h-3.5 w-3.5 text-muted-foreground" />}
                     </div>
                     <p className="mt-1 text-sm">{order.customer_name} • {order.phone}</p>
                     {order.email && <p className="text-xs text-muted-foreground">{order.email}</p>}

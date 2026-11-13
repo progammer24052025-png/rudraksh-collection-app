@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Download, ImagePlus, Link2, Loader2, Star, Trash2, UploadCloud } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, ImagePlus, Link2, Star, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+import { Spinner } from "@/components/ui/spinner";
 export function slugifyName(value: string) {
   return value
     .toLowerCase()
@@ -149,7 +150,7 @@ export function ImageDropzone({
         )}
       >
         {busy ? (
-          <Loader2 className="h-7 w-7 animate-spin text-sage-ink" aria-hidden />
+          <Spinner className="h-7 w-7 text-sage-ink" />
         ) : (
           <UploadCloud className="h-7 w-7 text-sage-ink" aria-hidden />
         )}

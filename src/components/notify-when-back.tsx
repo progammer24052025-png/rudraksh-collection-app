@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BellRing, Check, Loader2 } from "lucide-react";
+import { BellRing, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import { readValue, removeValue, writeValue } from "@/lib/firebase";
 
+import { Spinner } from "@/components/ui/spinner";
 type StockAlert = { email: string; at: string };
 
 const isEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(value);
@@ -123,7 +124,7 @@ export function NotifyWhenBack({ productId }: { productId: string }) {
           onChange={(event) => setEmail(event.target.value)}
         />
         <Button onClick={subscribe} disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Notify me"}
+          {busy ? <Spinner className="h-4 w-4" /> : "Notify me"}
         </Button>
       </div>
       <p className="mt-1.5 text-xs text-muted-foreground">One email, only about this item.</p>

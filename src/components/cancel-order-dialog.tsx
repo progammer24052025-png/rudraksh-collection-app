@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatPrice, getFirebaseAuth, updateOrderStatus } from "@/lib/firebase";
 import type { Order } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
 /**
  * "Which items?" — shown whenever an order is being cancelled.
  *
@@ -209,7 +210,7 @@ export function CancelOrderDialog({
             Keep order
           </Button>
           <Button variant="destructive" onClick={submit} disabled={busy || selected.size === 0}>
-            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {busy ? <Spinner className="mr-2 h-4 w-4" /> : null}
             {allSelected ? "Cancel whole order" : `Cancel ${selected.size} item${selected.size === 1 ? "" : "s"}`}
           </Button>
         </DialogFooter>

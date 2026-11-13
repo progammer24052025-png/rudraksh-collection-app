@@ -41,6 +41,7 @@ const checks = [
   ["userState", "deny", "per-account saved bag and wishlist"],
   ["serverState", "deny", "server only"],
   ["pincodeGeo", "deny", "server only"],
+  ["analytics", "deny", "visitor statistics are admin only"],
 ];
 
 if (keyArg) {

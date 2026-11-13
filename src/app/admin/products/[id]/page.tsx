@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Save, Plus, X } from "lucide-react";
+import { ArrowLeft, Save, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,8 @@ import {
 } from "@/lib/firebase";
 import type { Brand, Category, Product, ProductColor } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
+import { SealLoader } from "@/components/kit/brand-mark";
 type FormState = {
   name: string;
   slug: string;
@@ -216,7 +218,7 @@ export default function AdminProductEditPage() {
       <div className="min-h-screen">
         <AdminNav />
         <div className="flex h-96 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <SealLoader size={56} showLabel={false} />
         </div>
       </div>
     );
@@ -498,7 +500,7 @@ export default function AdminProductEditPage() {
           <div className="flex gap-3 border-t border-border pt-4">
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
+                <><Spinner className="mr-2 h-4 w-4" /> Saving…</>
               ) : (
                 <><Save className="mr-2 h-4 w-4" /> {isNew ? "Create Product" : "Save Changes"}</>
               )}

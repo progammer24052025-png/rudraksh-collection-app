@@ -198,6 +198,34 @@
   animation: kit-dot-pulse 1.05s ease-in-out infinite;
 }
 
+/* ── The mala seal as a loader ─────────────────────────────────────────────
+   A glow walks bead by bead round the seal, like beads passing through the
+   fingers during japa. Each bead runs the same keyframes with its own delay
+   (set inline from its position), so the travelling highlight needs no JS. */
+@keyframes seal-bead-glow {
+  0%, 62%, 100% { opacity: 0.38; transform: scale(0.82); }
+  12%           { opacity: 1;    transform: scale(1.28); }
+  30%           { opacity: 0.85; transform: scale(1.05); }
+}
+
+.seal-loading .seal-bead {
+  animation-name: seal-bead-glow;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  transform-box: view-box;
+}
+
+@keyframes seal-bead-mini {
+  0%, 60%, 100% { opacity: 0.22; }
+  10%           { opacity: 1; }
+}
+
+.seal-loading .seal-bead-mini {
+  animation-name: seal-bead-mini;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
 /* Ticket notches for the tear-off coupon */
 .kit-ticket {
   --notch: 9px;
@@ -230,6 +258,23 @@
     animation: none !important;
     transition: none !important;
   }
+
+  /* No travelling glow: the whole seal breathes slowly instead, so a
+     loading state is still visible without motion round the ring. */
+  .seal-loading .seal-bead,
+  .seal-loading .seal-bead-mini {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+  .seal-loading {
+    animation: seal-breathe 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes seal-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
 }
 
 /* ── Printing ──────────────────────────────────────────────────────────────

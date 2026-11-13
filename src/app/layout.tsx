@@ -5,8 +5,11 @@ import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
 import { StoreSettingsProvider } from "@/lib/store-context";
 import { storeConfig, siteUrl } from "@/lib/config";
+import { getStoreSettings } from "@/lib/server/catalog";
 import { AccountSync } from "@/components/account-sync";
 import { FirstOrderOffer } from "@/components/first-order-offer";
+import { SiteInsights } from "@/components/site-insights";
+import { StoreAnalytics } from "@/components/store-analytics";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -54,23 +57,48 @@ export const viewport: Viewport = {
   themeColor: "#faf7f2",
 };
 
-const organisationJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "ClothingStore",
-  name: storeConfig.name,
-  description:
-    "Children's clothing store offering boys', girls' and baby wear from trusted Indian brands.",
-  url: siteUrl,
-  address: {
-    "@type": "PostalAddress",
-    addressLocality: storeConfig.city,
-    addressRegion: storeConfig.state,
-    addressCountry: "IN",
-  },
-  areaServed: "India",
+/** A value the store saved itself, and not the placeholder shipped in config. */
+const own = (saved: string | undefined, placeholder: string) => {
+  const value = (saved ?? "").trim();
+  return value && value !== placeholder.trim() ? value : undefined;
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+/**
+ * The shop as search engines see it. Contact details are published only once
+ * they have been saved in Admin → Settings, so placeholder numbers never reach
+ * Google's business listings.
+ */
+function storeJsonLd(settings: Awaited<ReturnType<typeof getStoreSettings>>) {
+  const phone = own(settings?.phone, storeConfig.phone);
+  const street = own(settings?.address, storeConfig.address);
+  const instagram = settings?.instagram?.trim();
+  return {
+    "@context": "https://schema.org",
+    "@type": "ClothingStore",
+    name: storeConfig.name,
+    description:
+      "Children's clothing store offering boys', girls' and baby wear from trusted Indian brands.",
+    url: siteUrl,
+    logo: `${siteUrl}/icon.svg`,
+    image: `${siteUrl}/opengraph-image`,
+    ...(phone ? { telephone: phone } : {}),
+    address: {
+      "@type": "PostalAddress",
+      ...(street ? { streetAddress: street.replace(/\s*\n\s*/g, ", ") } : {}),
+      addressLocality: storeConfig.city,
+      addressRegion: storeConfig.state,
+      addressCountry: "IN",
+    },
+    ...(settings?.openingHours?.trim() ? { openingHours: settings.openingHours.trim() } : {}),
+    ...(instagram && /^https:\/\/(www\.)?instagram\.com\//.test(instagram) ? { sameAs: [instagram] } : {}),
+    currenciesAccepted: "INR",
+    paymentAccepted: "Cash, UPI, Credit Card, Debit Card, Net Banking",
+    areaServed: "India",
+  };
+}
+
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const organisationJsonLd = storeJsonLd(await getStoreSettings().catch(() => null));
   return (
     <html lang="en">
       <body className="antialiased">
@@ -92,8 +120,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organisationJsonLd) }}
+          // `<` is escaped so text saved in admin can never close the script tag.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organisationJsonLd).replace(/</g, "\\u003c") }}
         />
+        <SiteInsights />
+        <StoreAnalytics />
         <Toaster position="top-center" richColors />
       </body>
     </html>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Tag, X } from "lucide-react";
+import { Tag, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { couponDiscount, isCouponLive, validateCoupon } from "@/lib/pricing";
 import { formatPrice } from "@/lib/store-data";
 import type { Coupon } from "@/lib/types";
 
+import { Spinner } from "@/components/ui/spinner";
 /**
  * Coupons in the cart: a code box, plus the best live offer for this bag
  * suggested up front so nobody has to leave the site hunting for a code.
@@ -100,7 +101,7 @@ export function CartOffers({
   if (coupons === null) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking offers…
+        <Spinner className="h-3.5 w-3.5" /> Checking offers…
       </div>
     );
   }
