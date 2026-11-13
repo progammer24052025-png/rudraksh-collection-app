@@ -817,14 +817,22 @@ export async function saveSettings(settings: StoreSettings): Promise<void> {
   await updateValue(["settings"], { ...settings, updated_at: new Date().toISOString() });
 }
 
+/**
+ * Sends the contact form through /api/contact, which checks and throttles it
+ * before saving, so the inbox cannot be flooded from a script.
+ */
 export async function sendContactMessage(
-  message: Omit<ContactMessage, "id" | "status" | "created_at">,
+  message: Omit<ContactMessage, "id" | "status" | "created_at"> & { website?: string },
 ): Promise<void> {
-  await pushValue(["messages"], {
-    ...message,
-    status: "new",
-    created_at: new Date().toISOString(),
+  const user = getFirebaseAuth().currentUser;
+  const token = user ? await user.getIdToken().catch(() => null) : null;
+  const response = await fetch("/api/contact", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(message),
   });
+  const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (!response.ok || !data.ok) throw new Error(data.error || "Could not send your message.");
 }
 
 export const subscribeMessages = (callback: (messages: ContactMessage[]) => void) =>

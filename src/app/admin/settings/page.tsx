@@ -249,6 +249,32 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const [backingUp, setBackingUp] = useState(false);
+  const downloadBackup = async () => {
+    setBackingUp(true);
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      const response = await fetch("/api/admin/backup", { headers: token ? { authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error || "Could not create the backup.");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `rudraksh-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Backup downloaded — keep it somewhere private");
+    } catch {
+      toast.error("Could not reach the server. Try again.");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
   const sendSummaryNow = async () => {
     setSendingSummary(true);
     try {
@@ -769,6 +795,10 @@ export default function AdminSettingsPage() {
                 <Button type="button" variant="outline" onClick={sendSummaryNow} disabled={sendingSummary}>
                   {sendingSummary ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   Send summary now
+                </Button>
+                <Button type="button" variant="outline" onClick={downloadBackup} disabled={backingUp}>
+                  {backingUp ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                  Download backup
                 </Button>
                 <Button type="button" variant="outline" onClick={announceNow} disabled={announcing}>
                   {announcing ? <Spinner className="mr-2 h-4 w-4" /> : null}

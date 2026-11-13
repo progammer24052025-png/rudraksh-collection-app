@@ -25,7 +25,7 @@ const QUICK_LINKS = [
 export default function ContactPage() {
   const store = useStore();
   const { user, profile } = useAuth();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", subject: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", subject: "", message: "", website: "" });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -44,9 +44,10 @@ export default function ContactPage() {
         subject: form.subject.trim(),
         message: form.message.trim(),
         uid: user?.uid ?? null,
+        website: form.website,
       });
       setSent(true);
-      setForm({ name: "", email: "", phone: "", subject: "", message: "" });
+      setForm({ name: "", email: "", phone: "", subject: "", message: "", website: "" });
       toast.success("Message sent — we'll reply within 24 hours");
     } catch (error) {
       console.error(error);
@@ -92,6 +93,18 @@ export default function ContactPage() {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                  {/* Honeypot: invisible to people, filled in by spam bots. */}
+                  <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+                    <label>
+                      Leave this empty
+                      <input
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={form.website}
+                        onChange={(event) => setForm({ ...form, website: event.target.value })}
+                      />
+                    </label>
+                  </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="name">Your name *</Label>

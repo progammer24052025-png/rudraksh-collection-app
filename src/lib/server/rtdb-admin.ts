@@ -133,7 +133,8 @@ function urlFor(account: ServiceAccount, path: string, token?: string): string {
   const root = databaseUrl(account);
   if (!root) throw new Error("No Realtime Database URL configured");
   const clean = path.replace(/^\/+|\/+$/g, "");
-  const base = `${root}/${DB_ROOT}/${clean}.json`;
+  // An empty path means the whole store (used by the admin backup).
+  const base = clean ? `${root}/${DB_ROOT}/${clean}.json` : `${root}/${DB_ROOT}.json`;
   return token ? `${base}?access_token=${encodeURIComponent(token)}` : base;
 }
 

@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCart } from "@/lib/cart-context";
-import { formatPrice, createOrder, fetchProducts } from "@/lib/store-data";
+import { formatPrice, fetchProducts } from "@/lib/store-data";
 import { computeTotals, normalizePricing, validateCoupon } from "@/lib/pricing";
 import { readPendingCoupon, writePendingCoupon } from "@/lib/pending-coupon";
 import { BuyAssurance, StoreTrust } from "@/components/trust-strip";
@@ -572,44 +572,11 @@ function CheckoutContent() {
         return;
       }
 
-      if (data.secure && data.order) {
+      if (data.order) {
         handleSuccess(data.order.order_number, proof);
         return;
       }
-
-      // Server priced the order but cannot write without the service account.
-      const result = await createOrder({
-        user_id: user?.uid ?? null,
-        customer_name: address.fullName,
-        phone: address.phone,
-        email: address.email || null,
-        address: address.address,
-        city: address.city,
-        state: address.state,
-        pincode: address.pincode,
-        items: orderItems,
-        subtotal: totals.subtotal,
-        discount: totals.discount,
-        tax: totals.tax,
-        coupon_code: totals.couponCode,
-        shipping: totals.shipping,
-        total: totals.total,
-        payment_method: paymentMethod,
-        // A browser-written order is never self-declared as paid: the database
-        // rules cannot verify a gateway signature, so "paid" from the client is
-        // forgeable. The payment ids still travel with the order and the server
-        // marks it paid itself whenever the service account is configured.
-        payment_status: "pending",
-        razorpay_order_id: proof?.razorpay_order_id ?? null,
-        razorpay_payment_id: proof?.razorpay_payment_id ?? null,
-        order_status: "placed",
-      });
-
-      if (result.ok && result.order) {
-        handleSuccess(result.order.order_number, proof);
-      } else {
-        toast.error(result.error || "Failed to place order");
-      }
+      toast.error(data.error || "We could not place your order just now. Please try again.");
     } catch {
       if (proof) {
         setPaymentIssue(

@@ -176,15 +176,21 @@ export async function POST(request: Request) {
   }
 
   if (!secure) {
-    // Totals are still server-computed; the order write itself falls back to
-    // client-side when the service-account secret is not configured.
-    return Response.json({
-      ok: true,
-      secure: false,
-      totals,
-      order: null,
-      payment: payment ? { id: payment.paymentId, status: "paid" as const } : null,
-    });
+    // Orders are written only by the server, so the amount on every order is
+    // one the server worked out. Without the service account nothing can be
+    // recorded safely, and the shopper is asked to contact the store instead.
+    console.error("Checkout refused: FIREBASE_SERVICE_ACCOUNT is not configured.");
+    return Response.json(
+      {
+        ok: false,
+        totals,
+        ...(payment ? { paid: true, payment_id: payment.paymentId } : {}),
+        error: payment
+          ? `Your payment was received (${payment.paymentId}) but we could not record the order. Please contact us with this reference — you will not be charged again.`
+          : "Online ordering is briefly unavailable. Please try again shortly, or call or WhatsApp us to order.",
+      },
+      { status: 503 },
+    );
   }
 
   // A payment id may only ever produce one order. The gateway webhook records
@@ -323,13 +329,9 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-    console.warn("Secure checkout write failed, falling back to client write:", error);
-    return Response.json({
-      ok: true,
-      secure: false,
-      totals,
-      order: null,
-      payment: null,
-    });
+    return Response.json(
+      { ok: false, totals, error: "We could not place your order just now. Nothing was charged — please try again." },
+      { status: 500 },
+    );
   }
 }
