@@ -98,6 +98,30 @@ export default function ReturnsPage() {
 
         {/* Main Content Sections */}
         <div className="mt-10 space-y-8 text-sm leading-relaxed text-muted-foreground">
+          {/* Cancellations */}
+          <div id="cancellations" className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm">
+            <h2 className="font-serif text-xl font-medium text-foreground">Cancelling an Order</h2>
+            <ul className="mt-4 space-y-2">
+              <li>
+                • <strong>Before it is packed:</strong> cancel it yourself from My Account → Orders.
+                The whole order is cancelled and the stock goes back on sale.
+              </li>
+              <li>
+                • <strong>After it is packed:</strong> the order can no longer be cancelled. Once it is
+                delivered you can return it within {storeConfig.returnWindowDays} days under the policy below.
+              </li>
+              <li>
+                • <strong>Refunds for cancelled orders:</strong> anything paid online, including the
+                delivery charge, is refunded in full to the original payment method within 5–7 working
+                days. Cash-on-delivery orders have nothing to refund.
+              </li>
+              <li>
+                • <strong>Cancelled by us:</strong> if we have to cancel an item (for example it is out of
+                stock), we email you and refund what you paid for it in full.
+              </li>
+            </ul>
+          </div>
+
           {/* Section 1 */}
           <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm">
             <h2 className="font-serif text-xl font-medium text-foreground flex items-center gap-2.5">
@@ -107,7 +131,7 @@ export default function ReturnsPage() {
               Return Eligibility Criteria
             </h2>
             <p className="mt-4">
-              We want you and your child to love every outfit. You may return items within{" "}
+              We want you to love every outfit. You may return items within{" "}
               <strong>{storeConfig.returnWindowDays} calendar days</strong> of receiving your delivery,
               subject to the following conditions:
             </p>

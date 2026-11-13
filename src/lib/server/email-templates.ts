@@ -642,6 +642,43 @@ export function ownerNewOrderEmail(order: EmailOrder): MailContent {
   };
 }
 
+/** Tells the store a customer cancelled their own order. */
+export function ownerCustomerCancelledEmail(input: {
+  order: EmailOrder;
+  reason: string | null;
+  refund: number;
+}): MailContent {
+  const { order } = input;
+  const refundLine = input.refund > 0
+    ? `This order was paid online: refund ${money(input.refund)} from the Razorpay dashboard, then press "Refund done" on the order.`
+    : "It was cash on delivery, so there is nothing to refund.";
+  const blocks = `
+    <div style="margin:16px 0 0;padding:14px 16px;background:${CREAM};border-radius:12px;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:17px;color:${INK};">${escape(order.order_number)} · ${money(order.total)}</div>
+      <div style="margin-top:4px;font-size:13px;color:${MUTED};">${escape(order.customer_name || "Customer")}${order.phone ? ` · ${escape(order.phone)}` : ""}</div>
+    </div>
+    ${input.reason ? `<p style="margin:16px 0 0;font-size:14px;color:${INK};">Reason: ${escape(input.reason)}</p>` : ""}
+    <p style="margin:12px 0 0;font-size:14px;line-height:1.7;color:${MUTED};">${escape(refundLine)} Stock has been put back automatically.</p>`;
+  return {
+    subject: `Order cancelled by customer: ${order.order_number}`,
+    html: layout({
+      preheader: `${order.customer_name || "A customer"} cancelled ${order.order_number}.`,
+      heading: "A customer cancelled their order",
+      intro: "No need to pack this one.",
+      blocks,
+      cta: { label: "Open orders", href: adminUrl("/admin/orders") },
+    }),
+    text: [
+      `Order cancelled by customer: ${order.order_number} (${money(order.total)})`,
+      `${order.customer_name || "Customer"}${order.phone ? ` · ${order.phone}` : ""}`,
+      ...(input.reason ? [`Reason: ${input.reason}`] : []),
+      refundLine,
+      "Stock has been put back automatically.",
+      `Open orders: ${adminUrl("/admin/orders")}`,
+    ].join("\n"),
+  };
+}
+
 export type DigestSection = { title: string; lines: string[]; href: string };
 
 /** The morning "what needs doing today" email for the store. */

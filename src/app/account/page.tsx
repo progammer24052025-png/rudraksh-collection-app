@@ -57,6 +57,7 @@ import {
 
 import { Spinner } from "@/components/ui/spinner";
 import { SealLoader } from "@/components/kit/brand-mark";
+import { CustomerCancelOrder } from "@/components/customer-cancel-order";
 const ORDER_STEPS: Array<{ key: Order["order_status"]; label: string }> = [
   { key: "placed", label: "Placed" },
   { key: "confirmed", label: "Confirmed" },
@@ -553,6 +554,7 @@ function OrdersTab() {
                     <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                       <Link href={`/track-order?order=${order.order_number}`}>Track order</Link>
                     </Button>
+                    <CustomerCancelOrder order={order} />
                   </div>
                 </div>
               </div>

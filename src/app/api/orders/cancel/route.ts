@@ -1,7 +1,11 @@
 /**
  * Cancel an order, or some of its items.
  *
- * POST /api/orders/cancel  { orderId, itemIndexes: number[], reason?, restock? }   (admin caller)
+ * POST /api/orders/cancel  { orderId, itemIndexes?: number[], reason?, restock? }
+ *
+ * Admins can cancel any items at any stage. A signed-in customer can cancel
+ * their own whole order while it is still "placed" or "confirmed" — once it
+ * is packed it can no longer be cancelled, only returned after delivery.
  *
  * Cancelling touches money and stock, so it is done here on the server rather
  * than from the browser:
@@ -18,8 +22,9 @@
  *    on their next order.
  *  · The customer is emailed what was cancelled.
  */
-import { itemsCancelledEmail, orderStatusEmail, toEmailOrder } from "@/lib/server/email-templates";
-import { crossOriginResponse, isSameOrigin } from "@/lib/server/http";
+import { itemsCancelledEmail, orderStatusEmail, ownerCustomerCancelledEmail, toEmailOrder } from "@/lib/server/email-templates";
+import { crossOriginResponse, isSameOrigin, rateLimit, tooManyRequestsResponse } from "@/lib/server/http";
+import { canCustomerCancel } from "@/lib/orders";
 import { callerFrom } from "@/lib/server/id-token";
 import {
   adminAdjustNumber,
@@ -28,7 +33,7 @@ import {
   adminUpdate,
   isSecureCheckout,
 } from "@/lib/server/rtdb-admin";
-import { isMailConfigured, sendMail } from "@/lib/server/smtp";
+import { isMailConfigured, mailSender, sendMail } from "@/lib/server/smtp";
 import { cancellationMoney } from "@/lib/cancellation";
 import type { Order, OrderStatusEvent } from "@/lib/types";
 
@@ -55,28 +60,48 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Body | null;
   const orderId = String(body?.orderId ?? "").trim();
   const reason = String(body?.reason ?? "").trim().slice(0, 300) || null;
-  const restock = body?.restock !== false;
-  const wanted = Array.isArray(body?.itemIndexes)
+  let restock = body?.restock !== false;
+  let wanted = Array.isArray(body?.itemIndexes)
     ? Array.from(new Set(body.itemIndexes.map((value) => Math.floor(Number(value))))).filter(
         (value) => Number.isFinite(value) && value >= 0,
       )
     : [];
 
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(orderId)) return json({ ok: false, error: "Unknown order." }, 400);
-  if (!wanted.length) return json({ ok: false, error: "Choose at least one item to cancel." }, 400);
-
   try {
-    if (!(await adminGet<unknown>(`admins/${caller.uid}`))) {
-      return json({ ok: false, error: "Admins only." }, 403);
+    const isAdmin = Boolean(await adminGet<unknown>(`admins/${caller.uid}`));
+    if (!isAdmin) {
+      const gate = await rateLimit(`cancel:${caller.uid}`, 5, 60 * 60 * 1000);
+      if (!gate.ok) return tooManyRequestsResponse(gate.retryAfter);
     }
 
     const order = await adminGet<Order>(`orders/${orderId}`);
-    if (!order) return json({ ok: false, error: "Order not found." }, 404);
+    // A customer is told "not found" for anyone else's order, never "not yours".
+    if (!order || (!isAdmin && order.user_id !== caller.uid)) {
+      return json({ ok: false, error: "Order not found." }, 404);
+    }
     if (order.order_status === "cancelled") {
       return json({ ok: false, error: "This order is already cancelled." }, 409);
     }
 
     const items = Array.isArray(order.items) ? order.items : [];
+    if (!isAdmin) {
+      if (!canCustomerCancel(order.order_status)) {
+        return json(
+          {
+            ok: false,
+            code: "too-late",
+            error: "This order has already been packed, so it can no longer be cancelled. Once it arrives you can return it within the return window.",
+          },
+          409,
+        );
+      }
+      // Customers cancel the whole order; picking single items is for the store.
+      wanted = items.map((item, index) => (item && !item.cancelled ? index : -1)).filter((index) => index >= 0);
+      restock = true;
+    }
+    if (!wanted.length) return json({ ok: false, error: "Choose at least one item to cancel." }, 400);
+
     const toCancel = wanted.filter((index) => items[index] && !items[index].cancelled);
     if (!toCancel.length || toCancel.length !== wanted.length) {
       return json({ ok: false, error: "Those items are no longer available to cancel. Refresh and try again." }, 409);
@@ -106,7 +131,7 @@ export async function POST(request: Request) {
       {
         status: fullCancel ? "cancelled" : order.order_status,
         at: iso,
-        note: `${fullCancel ? "Order cancelled" : "Items cancelled"}: ${names}${reason ? ` — ${reason}` : ""}`,
+        note: `${fullCancel ? "Order cancelled" : "Items cancelled"}${isAdmin ? "" : " by the customer"}: ${names}${reason ? ` — ${reason}` : ""}`,
       },
     ];
 
@@ -187,6 +212,18 @@ export async function POST(request: Request) {
               reason,
             });
         const sent = await sendMail({ to: order.email as string, ...mail });
+        if (!sent.ok) throw new Error(sent.error || "mail not sent");
+      });
+    }
+
+    if (!isAdmin && isMailConfigured() && mailSender()) {
+      await step("store notification", async () => {
+        const mail = ownerCustomerCancelledEmail({
+          order: toEmailOrder({ ...updated, items }),
+          reason,
+          refund: wasPaid ? refundNow : 0,
+        });
+        const sent = await sendMail({ to: mailSender(), ...mail });
         if (!sent.ok) throw new Error(sent.error || "mail not sent");
       });
     }

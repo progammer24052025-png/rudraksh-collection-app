@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { findOrderForTracking, formatPrice } from "@/lib/firebase";
-import { ORDER_TIMELINE, statusLabel } from "@/lib/orders";
+import { ORDER_TIMELINE, canCustomerCancel, statusLabel } from "@/lib/orders";
 import type { OrderTracking } from "@/lib/types";
 
 import { Spinner } from "@/components/ui/spinner";
@@ -153,6 +153,16 @@ function TrackOrderInner() {
               </Button>
             </div>
           </div>
+
+          {!cancelled && canCustomerCancel(result.order_status) ? (
+            <p className="mt-6 rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              Changed your mind? You can cancel this order from{" "}
+              <Link href="/account" className="font-medium text-foreground underline-offset-4 hover:underline">
+                My Account → Orders
+              </Link>{" "}
+              until it is packed.
+            </p>
+          ) : null}
 
           {cancelled ? (
             <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm">

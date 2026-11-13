@@ -11,6 +11,7 @@ import {
   savingsPerUnit,
 } from "../src/lib/merch";
 import { feeForDistance, haversineKm, normalizeShipping } from "../src/lib/shipping";
+import { canCustomerCancel } from "../src/lib/orders";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -82,6 +83,12 @@ eq("low stock shows only when it is really low", [lowStockCount({ stock: 3 }), l
 eq("quantity is capped at stock", maxQuantity({ stock: 2 }), 2);
 eq("quantity is capped at the per-order limit", maxQuantity({ stock: 500 }), 20);
 eq("PIN codes", [isValidPincode("390019"), isValidPincode("012345"), isValidPincode("39001")], [true, false, false]);
+
+// ── Customer cancellation window ────────────────────────────────────────────
+eq("customer can cancel before packing",
+  (["placed", "confirmed"] as const).map((status) => canCustomerCancel(status)), [true, true]);
+eq("customer cannot cancel once packed or later",
+  (["packed", "shipped", "delivered", "cancelled"] as const).map((status) => canCustomerCancel(status)), [false, false, false, false]);
 
 console.log(fails ? `\n${fails} money check(s) failed` : "\nall money checks passed");
 process.exit(fails ? 1 : 0);
