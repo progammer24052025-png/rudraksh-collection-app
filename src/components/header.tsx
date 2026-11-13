@@ -107,7 +107,7 @@ export function Header() {
         <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-2.5" aria-label="Rudraksh Collection, home">
           <BrandSeal size={28} className="shrink-0 sm:hidden" />
           <BrandSeal size={34} className="hidden shrink-0 sm:block" />
-          <span className="truncate font-serif text-lg font-semibold tracking-tight sm:text-2xl">
+          <span className="truncate font-serif text-[1.05rem] font-semibold tracking-tight min-[400px]:text-lg sm:text-2xl">
             Rudraksh Collection
           </span>
         </Link>

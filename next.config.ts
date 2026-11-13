@@ -87,6 +87,8 @@ const nextConfig: NextConfig = {
     ADMIN_EMAIL: process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "",
     SITE_URL: process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "",
     IMAGE_HOSTS: process.env.IMAGE_HOSTS || "",
+    // Lets an open app notice that a newer deploy is live (components/app-updates).
+    APP_VERSION: (process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "dev").slice(0, 12),
   },
   images: {
     remotePatterns: imageHosts.map((hostname) => ({ protocol: 'https' as const, hostname })),

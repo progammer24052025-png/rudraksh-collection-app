@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Phone, Mail, MapPin, Instagram, Clock, MessageCircle } from "lucide-react";
 import { useStore } from "@/lib/store-context";
 import { BrandSeal } from "@/components/kit/brand-mark";
+import { InstallAppButton } from "@/components/app-updates";
 import { brands as fallbackBrands } from "@/lib/config";
 import { subscribeAdminRecord, subscribeBrands } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
@@ -67,6 +68,7 @@ export function Footer() {
               <BrandSeal size={44} />
               <span className="font-serif text-xl font-semibold">{store.name}</span>
             </Link>
+            <InstallAppButton className="mt-4 flex" />
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               {store.tagline}. Everyday and ethnic wear for men, women and kids from trusted brands,
               carefully selected in {store.city} and delivered across India.

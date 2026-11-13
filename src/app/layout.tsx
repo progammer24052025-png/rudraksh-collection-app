@@ -10,6 +10,7 @@ import { AccountSync } from "@/components/account-sync";
 import { FirstOrderOffer } from "@/components/first-order-offer";
 import { SiteInsights } from "@/components/site-insights";
 import { StoreAnalytics } from "@/components/store-analytics";
+import { AppUpdates } from "@/components/app-updates";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -34,6 +35,8 @@ export const metadata: Metadata = {
     "family clothing store",
   ],
   applicationName: storeConfig.name,
+  // iPhone "Add to Home Screen" opens full-screen with this name.
+  appleWebApp: { capable: true, title: "Rudraksh", statusBarStyle: "default" },
   // Google Search Console's HTML-tag check. A *.vercel.app address cannot use
   // the DNS method, so the code Search Console gives you goes in this variable.
   ...(process.env.GOOGLE_SITE_VERIFICATION
@@ -143,6 +146,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         />
         <SiteInsights />
         <StoreAnalytics />
+        <AppUpdates />
         <Toaster position="top-center" richColors />
       </body>
     </html>
