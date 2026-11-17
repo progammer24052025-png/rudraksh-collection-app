@@ -15,7 +15,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ["/visit", 0.6],
     ["/contact", 0.6],
     ["/faq", 0.6],
-    ["/track-order", 0.5],
+    // /track-order is left out: robots.ts blocks it (it is a lookup form, not content), and a
+    // sitemap entry Google may not crawl shows up as an error in Search Console.
     ["/shipping", 0.4],
     ["/returns", 0.4],
     ["/privacy", 0.3],
