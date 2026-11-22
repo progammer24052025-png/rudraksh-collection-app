@@ -17,6 +17,8 @@ export default function OfflinePage() {
         Rudraksh Collection needs an internet connection to show the latest products and prices.
         Check your connection and try again.
       </p>
+      {/* A full page load on purpose: it retries the network instead of the cached app shell. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
       <a
         href="/"
         className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground"

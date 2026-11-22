@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/immutability -- three.js scenes move the camera and meshes every frame inside useFrame, which is how react-three-fiber is meant to be used. */
 
 import { useRef, Suspense, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";

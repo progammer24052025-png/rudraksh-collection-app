@@ -250,7 +250,7 @@ export async function sendMail(mail: OutgoingMail): Promise<{ ok: boolean; error
 
     requireCode(await channel.read(), "220", "Greeting");
 
-    let ehlo = await channel.command(`EHLO ${heloName()}`);
+    const ehlo = await channel.command(`EHLO ${heloName()}`);
     requireCode(ehlo, "250", "EHLO");
     if (!/AUTH\b/i.test(ehlo)) throw new Error("This server does not offer SMTP AUTH");
 

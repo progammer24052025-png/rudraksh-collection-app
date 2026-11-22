@@ -22,7 +22,9 @@ const QUIET_PATHS = ["/checkout", "/admin/products/"];
 export function AppUpdates() {
   const pathname = usePathname();
   const pathRef = useRef(pathname);
-  pathRef.current = pathname;
+  useEffect(() => {
+    pathRef.current = pathname;
+  }, [pathname]);
   const announced = useRef(false);
 
   useEffect(() => {

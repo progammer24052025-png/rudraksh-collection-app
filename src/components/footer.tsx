@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Phone, Mail, MapPin, Instagram, Clock, MessageCircle } from "lucide-react";
+import { Phone, Mail, MapPin, Clock, MessageCircle } from "lucide-react";
 import { useStore } from "@/lib/store-context";
 import { BrandSeal } from "@/components/kit/brand-mark";
 import { InstallAppButton } from "@/components/app-updates";
@@ -10,6 +10,17 @@ import { brands as fallbackBrands } from "@/lib/config";
 import { subscribeAdminRecord, subscribeBrands } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import type { Brand } from "@/lib/types";
+
+/** Instagram glyph (the icon set no longer ships brand logos). */
+function Instagram({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
 
 const SHOP_LINKS = [
   { label: "All Products", href: "/products" },

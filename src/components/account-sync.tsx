@@ -74,7 +74,9 @@ export function AccountSync() {
   const readyFor = useRef<string | null>(null); // uid whose first merge is done
   const previousUid = useRef<string | null>(null);
   const itemsRef = useRef(items);
-  itemsRef.current = items;
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   // Sign-in merge and sign-out clean-up.
   useEffect(() => {
