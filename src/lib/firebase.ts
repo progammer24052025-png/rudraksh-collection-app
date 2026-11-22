@@ -27,6 +27,7 @@ import {
   type Auth,
   type ConfirmationResult,
   type User,
+  signInWithCustomToken,
 } from "firebase/auth";
 import {
   getDatabase,
@@ -41,6 +42,8 @@ import {
   query,
   orderByChild,
   equalTo,
+  goOffline,
+  goOnline,
   type Database,
 } from "firebase/database";
 
@@ -184,12 +187,154 @@ export const rtdbPath = (...segments: string[]) => {
 };
 
 // ── Generic Realtime Database helpers ────────────────────────
-export async function readValue<T>(segments: string[]): Promise<T | null> {
+//
+// Shoppers do not hold a live database connection. The free Firebase plan
+// allows about 100 at once, and a shop with 1,500 customers passes that on a
+// busy evening. So, outside /admin:
+//   • public data (catalogue, brands, settings, offers, reviews) comes from
+//     /api/public/…, which Vercel's CDN answers without touching the database;
+//   • private data (profile, orders, saved bag) is read and written over a
+//     connection that is opened for the request and closed again when idle;
+//   • "subscriptions" become a read now, again when the tab comes back into
+//     view, every couple of minutes while it is open, and after the visitor's
+//     own saves.
+// Admin pages keep live updates exactly as before.
+
+const PUBLIC_ROOTS = new Set(["products", "brands", "categories", "banners", "settings", "coupons", "reviews"]);
+const SAFE_SEGMENT = /^[A-Za-z0-9_-]{1,160}$/;
+const PUBLIC_MEMO_MS = 10_000;
+/** Open pages re-check public data this often (answered by the CDN, not the database). */
+const PUBLIC_POLL_MS = 30_000;
+/** Private data (orders, profile) is re-checked less often: each check is a database read. */
+const PRIVATE_POLL_MS = 120_000;
+const IDLE_DISCONNECT_MS = 15_000;
+
+const cleanSegments = (segments: string[]) =>
+  segments.map((s) => (s ?? "").toString().trim().replace(/^\/+|\/+$/g, "")).filter(Boolean);
+
+/** Admin pages need live updates; everywhere else reads on demand. */
+const isLivePage = () => typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+
+const isPublicPath = (segments: string[]) =>
+  segments.length > 0 &&
+  segments.length <= 3 &&
+  PUBLIC_ROOTS.has(segments[0]) &&
+  segments.every((segment) => SAFE_SEGMENT.test(segment));
+
+const overlaps = (a: string[], b: string[]) => {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+// Several components on one page ask for the same list; they share one request.
+const publicMemo = new Map<string, { at: number; promise: Promise<unknown> }>();
+
+async function readPublic<T>(segments: string[], fresh = false): Promise<T | null> {
+  const key = segments.join("/");
+  const hit = publicMemo.get(key);
+  if (!fresh && hit && Date.now() - hit.at < PUBLIC_MEMO_MS) return hit.promise as Promise<T | null>;
+  const promise = fetch(`/api/public/${segments.map(encodeURIComponent).join("/")}`).then(async (response) => {
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Public read failed with HTTP ${response.status}`);
+    return (await response.json()) as T | null;
+  });
+  publicMemo.set(key, { at: Date.now(), promise });
+  promise.catch(() => publicMemo.delete(key));
+  return promise as Promise<T | null>;
+}
+
+// Connection bookkeeping: open while something needs it, closed when idle.
+let liveListeners = 0;
+let inFlight = 0;
+let disconnected = false;
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+function connect() {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = undefined;
+  if (disconnected) {
+    goOnline(getFirebaseDb());
+    disconnected = false;
+  }
+}
+
+function releaseSoon() {
+  if (idleTimer) clearTimeout(idleTimer);
+  if (typeof window === "undefined" || isLivePage() || liveListeners > 0 || inFlight > 0) return;
+  idleTimer = setTimeout(() => {
+    if (liveListeners === 0 && inFlight === 0 && !isLivePage() && !disconnected) {
+      goOffline(getFirebaseDb());
+      disconnected = true;
+    }
+  }, IDLE_DISCONNECT_MS);
+}
+
+/** Runs one database operation with the connection open. */
+async function withConnection<T>(operation: () => Promise<T>): Promise<T> {
+  connect();
+  inFlight += 1;
   try {
-    const snapshot = await get(rtdbRef(...segments));
-    return (snapshot.val() as T) ?? null;
+    return await operation();
+  } finally {
+    inFlight -= 1;
+    releaseSoon();
+  }
+}
+
+const socketGet = <T,>(segments: string[]) =>
+  withConnection(async () => ((await get(rtdbRef(...segments))).val() as T) ?? null);
+
+/** Runs a query (orderByChild/equalTo) with the connection open. */
+const getQuery = (...args: Parameters<typeof query>) => withConnection(() => get(query(...args)));
+/** Reads one exact path with the connection open (for paths that are not public). */
+const getRef = (target: ReturnType<typeof rtdbRef>) => withConnection(() => get(target));
+
+// Open "subscriptions" outside admin, refreshed after the visitor's own saves.
+const watchers = new Set<{ segments: string[]; refresh: () => void }>();
+const refreshWatchers = (segments: string[]) => {
+  for (const watcher of watchers) if (overlaps(watcher.segments, segments)) watcher.refresh();
+};
+
+// Admin saves to public data refresh the cached copy, so every device sees it.
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+function refreshPublicCache(segments: string[]) {
+  if (!isLivePage() || !PUBLIC_ROOTS.has(segments[0] ?? "")) return;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      if (!token) return;
+      await fetch("/api/admin/catalog", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "refresh" }),
+      });
+    } catch {
+      /* the cached copy refreshes on its own within ten minutes */
+    }
+  }, 1500);
+}
+
+function afterWrite(segments: string[]) {
+  publicMemo.clear();
+  refreshPublicCache(segments);
+  refreshWatchers(segments);
+}
+
+export async function readValue<T>(segments: string[]): Promise<T | null> {
+  const clean = cleanSegments(segments);
+  if (typeof window !== "undefined" && !isLivePage() && isPublicPath(clean)) {
+    try {
+      return await readPublic<T>(clean);
+    } catch (error) {
+      console.warn(`Cached read failed (${clean.join("/")}), reading the database directly:`, error);
+    }
+  }
+  try {
+    return await socketGet<T>(clean);
   } catch (error) {
-    console.error(`RTDB read failed (${segments.join("/")}):`, error);
+    console.error(`RTDB read failed (${clean.join("/")}):`, error);
     return null;
   }
 }
@@ -199,40 +344,103 @@ export function subscribeValue<T>(
   callback: (value: T | null) => void,
   onError?: (error: unknown) => void,
 ): () => void {
-  let unsubscribe = () => {};
-  try {
-    unsubscribe = onValue(
-      rtdbRef(...segments),
-      (snapshot) => callback((snapshot.val() as T) ?? null),
-      (error) => {
-        console.error(`RTDB subscription failed (${segments.join("/")}):`, error);
-        onError?.(error);
-        callback(null);
-      },
-    );
-  } catch (error) {
-    console.error(`RTDB subscription could not start (${segments.join("/")}):`, error);
-    onError?.(error);
+  const clean = cleanSegments(segments);
+
+  if (isLivePage()) {
+    let unsubscribe = () => {};
+    try {
+      connect();
+      const stop = onValue(
+        rtdbRef(...clean),
+        (snapshot) => callback((snapshot.val() as T) ?? null),
+        (error) => {
+          console.error(`RTDB subscription failed (${clean.join("/")}):`, error);
+          onError?.(error);
+          callback(null);
+        },
+      );
+      liveListeners += 1;
+      unsubscribe = () => {
+        stop();
+        liveListeners -= 1;
+        releaseSoon();
+      };
+    } catch (error) {
+      console.error(`RTDB subscription could not start (${clean.join("/")}):`, error);
+      onError?.(error);
+    }
+    return unsubscribe;
   }
-  return unsubscribe;
+
+  let stopped = false;
+  let last: string | undefined;
+  const load = async (fresh = false) => {
+    try {
+      const value = isPublicPath(clean)
+        ? await readPublic<T>(clean, fresh).catch(() => socketGet<T>(clean))
+        : await socketGet<T>(clean);
+      if (stopped) return;
+      const text = JSON.stringify(value ?? null);
+      if (text === last) return;
+      last = text;
+      callback(value ?? null);
+    } catch (error) {
+      if (stopped) return;
+      console.error(`RTDB read failed (${clean.join("/")}):`, error);
+      onError?.(error);
+      if (last === undefined) {
+        last = "null";
+        callback(null);
+      }
+    }
+  };
+
+  const watcher = { segments: clean, refresh: () => void load(true) };
+  watchers.add(watcher);
+  const onVisible = () => {
+    if (document.visibilityState === "visible") void load();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+  const timer = setInterval(() => {
+    if (document.visibilityState === "visible") void load();
+  }, isPublicPath(clean) ? PUBLIC_POLL_MS : PRIVATE_POLL_MS);
+  void load();
+
+  return () => {
+    stopped = true;
+    watchers.delete(watcher);
+    document.removeEventListener("visibilitychange", onVisible);
+    clearInterval(timer);
+  };
 }
 
 export async function writeValue(segments: string[], value: unknown): Promise<void> {
-  await set(rtdbRef(...segments), value);
+  const clean = cleanSegments(segments);
+  await withConnection(() => set(rtdbRef(...clean), value));
+  afterWrite(clean);
 }
 
 export async function updateValue(segments: string[], value: Record<string, unknown>): Promise<void> {
-  await update(rtdbRef(...segments), value);
+  const clean = cleanSegments(segments);
+  await withConnection(() => update(rtdbRef(...clean), value));
+  afterWrite(clean);
 }
 
 export async function pushValue(segments: string[], value: unknown): Promise<string> {
-  const newRef = push(rtdbRef(...segments));
-  await set(newRef, value);
-  return newRef.key ?? "";
+  const clean = cleanSegments(segments);
+  const key = await withConnection(async () => {
+    const newRef = push(rtdbRef(...clean));
+    await set(newRef, value);
+    return newRef.key ?? "";
+  });
+  afterWrite(clean);
+  return key;
 }
 
 export async function removeValue(segments: string[]): Promise<void> {
-  await remove(rtdbRef(...segments));
+  const clean = cleanSegments(segments);
+  await withConnection(() => remove(rtdbRef(...clean)));
+  afterWrite(clean);
 }
 
 // ── Collection helpers ──────────────────────────────────────
@@ -426,8 +634,16 @@ export const fetchProductBySlug = async (slug: string): Promise<Product | null> 
   const key = (slug ?? "").toString().trim();
   if (!key) return null;
 
+  // Shoppers: the cached catalogue is already on its way (other parts of the
+  // page use it too), so one lookup in it costs no database read at all.
+  if (!isLivePage()) {
+    const products = await fetchProducts();
+    const found = products.find((product) => product.slug === key || product.id === key);
+    if (found || products.length) return found ?? null;
+  }
+
   try {
-    const snapshot = await get(query(rtdbRef("products"), orderByChild("slug"), equalTo(key)));
+    const snapshot = await getQuery(rtdbRef("products"), orderByChild("slug"), equalTo(key));
     const [first] = toList<Product>(snapshot.val() as EntityMap<Product> | null);
     if (first) return first;
   } catch (error) {
@@ -496,7 +712,7 @@ export async function findOrderByNumber(uid: string, orderNumber: string): Promi
   }
 
   try {
-    const snapshot = await get(query(rtdbRef("orders"), orderByChild("order_number"), equalTo(key)));
+    const snapshot = await getQuery(rtdbRef("orders"), orderByChild("order_number"), equalTo(key));
     return toList<Order>(snapshot.val() as EntityMap<Order> | null)[0] ?? null;
   } catch {
     return null; // not an admin
@@ -796,7 +1012,7 @@ export async function findOrderForTracking(
 
   // Fallback for older records
   try {
-    const snapshot = await get(query(rtdbRef("tracking"), orderByChild("order_number"), equalTo(key)));
+    const snapshot = await getQuery(rtdbRef("tracking"), orderByChild("order_number"), equalTo(key));
     const matches = toList<OrderTracking>(snapshot.val() as EntityMap<OrderTracking> | null);
     const match = matches.find(
       (entry) => (entry.phone_last4 ?? "").replace(/\D/g, "").slice(-4) === cleanLast4,
@@ -904,7 +1120,7 @@ export async function checkUserCouponUsed(
     let phoneRedemption: { order_number?: string } | null | true = null;
     try {
       // `readValue` swallows errors, so the denial has to be caught here.
-      const snapshot = await get(rtdbRef("couponRedemptionsByPhone", cleanCode, phoneDigits));
+      const snapshot = await getRef(rtdbRef("couponRedemptionsByPhone", cleanCode, phoneDigits));
       phoneRedemption = (snapshot.val() as { order_number?: string } | null) ?? null;
     } catch {
       phoneRedemption = true;
@@ -1211,6 +1427,33 @@ export const signInWithEmailAccount = async (email: string, password: string) =>
   void logActivity(credential.user.uid, { type: "signin", label: "Signed in with email" });
   return credential.user;
 };
+
+/** Emails a 6-digit sign-in code (free; works where SMS codes do not). */
+export async function requestEmailCode(email: string): Promise<void> {
+  const response = await fetch("/api/auth/email-code", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "send", email: email.trim() }),
+  });
+  const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (response.status === 429 && !data.error) throw new Error("Too many tries. Please wait a few minutes.");
+  if (!response.ok || !data.ok) throw new Error(data.error || "Could not send the code. Please try again.");
+}
+
+/** Signs in with the code from the email. */
+export async function signInWithEmailCode(email: string, code: string): Promise<User> {
+  const response = await fetch("/api/auth/email-code", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "verify", email: email.trim(), code: code.trim() }),
+  });
+  const data = (await response.json().catch(() => ({}))) as { ok?: boolean; token?: string; error?: string };
+  if (response.status === 429 && !data.error) throw new Error("Too many tries. Please wait a few minutes.");
+  if (!response.ok || !data.ok || !data.token) throw new Error(data.error || "That code did not work.");
+  const credential = await signInWithCustomToken(getFirebaseAuth(), data.token);
+  void logActivity(credential.user.uid, { type: "signin", label: "Signed in with an email code" });
+  return credential.user;
+}
 
 export const createEmailAccount = (email: string, password: string) =>
   createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);

@@ -267,6 +267,8 @@ export async function sendMail(mail: OutgoingMail): Promise<{ ok: boolean; error
     requireCode(await channel.read(), "250", "Message body");
 
     await channel.command("QUIT").catch(() => "");
+    // Counted so bulk sends never use up the room orders and sign-in codes need.
+    await import("@/lib/server/mail-budget").then((budget) => budget.countSentMail()).catch(() => {});
     return { ok: true };
   } catch (error) {
     const detail = explain(error instanceof Error ? error.message : String(error));

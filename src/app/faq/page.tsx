@@ -22,7 +22,7 @@ const SECTIONS: Array<{ title: string; items: Array<{ q: string; a: string }> }>
       },
       {
         q: "Do I need an account to order?",
-        a: "Yes. Signing in takes a few seconds with your mobile number (a one-time code by SMS) or your Google account — there is no password to remember. It keeps your orders, addresses and coupons safe, and lets you track and cancel orders yourself.",
+        a: "Yes. Signing in takes a few seconds with your Google account, or with a 6-digit code we email you — there is no password to remember (you can still set one if you prefer). It keeps your orders, addresses and coupons safe, and lets you track and cancel orders yourself.",
       },
       {
         q: "How will I know my order is confirmed?",

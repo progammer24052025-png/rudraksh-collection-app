@@ -18,6 +18,7 @@ import {
   tooManyRequestsResponse,
 } from "@/lib/server/http";
 import { callerFrom } from "@/lib/server/id-token";
+import { refreshCatalog } from "@/lib/server/catalog";
 import { adminGet, adminSet, adminUpdate, isSecureCheckout } from "@/lib/server/rtdb-admin";
 import type { Order, Review } from "@/lib/types";
 
@@ -118,6 +119,7 @@ export async function POST(request: Request) {
       ? Math.round((ratings.reduce((sum, value) => sum + value, 0) / ratings.length) * 10) / 10
       : 0;
     await adminUpdate(`products/${productId}`, { rating: average, rating_count: ratings.length });
+    refreshCatalog();
 
     return json({ ok: true, review, rating: average, rating_count: ratings.length });
   } catch (error) {

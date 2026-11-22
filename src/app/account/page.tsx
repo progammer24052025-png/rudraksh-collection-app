@@ -29,6 +29,7 @@ import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmailCodeSignIn } from "@/components/email-code-sign-in";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -105,6 +106,12 @@ function FirebaseNotConfigured() {
   );
 }
 
+/**
+ * SMS codes need Firebase's paid plan, so the phone option stays hidden until
+ * NEXT_PUBLIC_SMS_SIGN_IN=on is set (after upgrading). Email codes replace it.
+ */
+const SMS_SIGN_IN = process.env.NEXT_PUBLIC_SMS_SIGN_IN === "on";
+
 function LoginScreen() {
   const { initRecaptcha, sendPhoneOTP, verifyPhoneOTP, loginWithGoogle, error, clearError, isConfigured } =
     useAuth();
@@ -112,7 +119,7 @@ function LoginScreen() {
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [busy, setBusy] = useState<"otp" | "verify" | "google" | null>(null);
-  const [mode, setMode] = useState<"email" | "phone">("email");
+  const [mode, setMode] = useState<"code" | "email" | "phone">("code");
   const [creating, setCreating] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -221,7 +228,33 @@ function LoginScreen() {
           className="mt-8 rounded-2xl border border-border bg-card/80 p-6 shadow-xl shadow-black/5 backdrop-blur-sm"
         >
           <AnimatePresence mode="wait">
-            {mode === "email" ? (
+            {mode === "code" ? (
+              <motion.div
+                key="code"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="space-y-5"
+              >
+                <div className="text-center">
+                  <h2 className="font-serif text-xl font-semibold">Sign in or create an account</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">One tap with Google, or a code by email.</p>
+                </div>
+                <Button variant="outline" onClick={handleGoogle} className="h-12 w-full rounded-xl text-base" disabled={busy !== null}>
+                  {busy === "google" ? <Spinner className="mr-2 h-4 w-4" /> : <GoogleIcon />}
+                  <span className="ml-2">Continue with Google</span>
+                </Button>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">or by email</span>
+                  </div>
+                </div>
+                <EmailCodeSignIn onBack={() => setMode("email")} backLabel="Use email and password instead" />
+              </motion.div>
+            ) : mode === "email" ? (
               <motion.div
                 key="email"
                 initial={{ opacity: 0, y: 8 }}
@@ -254,11 +287,20 @@ function LoginScreen() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setMode("phone")}
+                        onClick={() => setMode("code")}
                         className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
                       >
-                        Prefer a mobile OTP? Use your number instead
+                        Forgot your password, or prefer none? Email me a sign-in code
                       </button>
+                      {SMS_SIGN_IN && (
+                        <button
+                          type="button"
+                          onClick={() => setMode("phone")}
+                          className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Prefer a mobile OTP? Use your number instead
+                        </button>
+                      )}
                     </div>
                   }
                 />
@@ -879,7 +921,7 @@ function AccountContent() {
           </div>
         </div>
 
-        {!profile?.phoneVerified && (
+        {SMS_SIGN_IN && !profile?.phoneVerified && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-saffron/30 bg-saffron/10 p-4">
             <div className="flex items-center gap-3">
               <Shield className="h-5 w-5 text-saffron-ink" />

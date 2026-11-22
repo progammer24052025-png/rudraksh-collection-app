@@ -848,3 +848,29 @@ export function itemsCancelledEmail(input: {
     ].join("\n"),
   };
 }
+
+/** The one-time code for signing in by email. */
+export function signInCodeEmail(input: { code: string; minutes: number }): MailContent {
+  const blocks = `<div style="margin:20px 0 0;padding:18px;background:${CREAM};border-radius:12px;text-align:center;">
+      <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:${INK};font-family:Consolas,Menlo,monospace;">${escape(input.code)}</div>
+      <div style="margin-top:6px;font-size:12px;color:${MUTED};">Valid for ${input.minutes} minutes</div>
+    </div>`;
+  const text = [
+    `Your ${storeConfig.name} sign-in code is ${input.code}`,
+    "",
+    `It works for ${input.minutes} minutes. If you did not ask for it, ignore this email: nobody can sign in without the code.`,
+    "",
+    `${storeConfig.name} · ${storeConfig.location}`,
+  ].join("\n");
+  return {
+    subject: `${input.code} is your ${storeConfig.name} sign-in code`,
+    html: layout({
+      preheader: `Your sign-in code is ${input.code}.`,
+      heading: "Your sign-in code",
+      intro: `Enter this code on ${storeConfig.name} to sign in. We will never ask you for it by phone or chat.`,
+      blocks,
+      closing: "If you did not ask for this code, you can ignore this email — nobody can sign in without it.",
+    }),
+    text,
+  };
+}

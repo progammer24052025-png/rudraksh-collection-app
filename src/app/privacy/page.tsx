@@ -134,7 +134,7 @@ export default function PrivacyPage() {
               <div className="rounded-xl border border-border/80 bg-background/50 p-4">
                 <h3 className="font-medium text-foreground">A. Identity &amp; Contact Credentials</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  • <strong>Mobile Number:</strong> Verified via SMS One-Time Password (OTP) for secure login.<br />
+                  • <strong>Mobile Number:</strong> Collected with your delivery address so the courier can reach you. Sign-in uses Google or a one-time code sent to your email.<br />
                   • <strong>Google Authentication:</strong> Name, verified email address, and avatar image. We never receive or store your Google password.<br />
                   • <strong>Full Name &amp; Delivery Address:</strong> PIN code, city, state, and phone number required for order fulfillment.
                 </p>

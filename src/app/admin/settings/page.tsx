@@ -343,12 +343,16 @@ export default function AdminSettingsPage() {
       else if (data.skipped === "first-run") toast.success("New-arrival emails are now set up. Products you add from now on will be announced.");
       else if (data.skipped === "no-new-products") toast.info("No new products to announce — everything recent has already gone out.");
       else if (data.skipped === "no-recipients") toast.info("No subscribed customers with an email address yet.");
+      else if (data.skipped === "daily-limit")
+        toast.info(
+          `Today's email allowance is used up. ${data.overLimit ?? 0} customer(s) will get the announcement automatically over the next days.`,
+        );
       else if (data.skipped) toast.error("Email or server credentials are not set up yet.");
       else
         toast.success(
           `${data.products} product(s) announced to ${data.sent} customer(s)` +
             (data.failed ? `, ${data.failed} failed` : "") +
-            (data.overLimit ? `, ${data.overLimit} over the daily limit` : ""),
+            (data.overLimit ? `. The other ${data.overLimit} get it automatically over the next days.` : ""),
         );
     } catch {
       toast.error("Could not reach the server. Try again.");

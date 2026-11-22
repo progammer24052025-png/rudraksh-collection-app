@@ -133,7 +133,7 @@ export default function TermsPage() {
                 <strong>Capacity to Contract:</strong> You must be at least 18 years of age or accessing under the supervision of a parent/legal guardian to enter into legally enforceable transactions under the Indian Contract Act, 1872.
               </li>
               <li>
-                <strong>Account Credentials:</strong> You are solely responsible for maintaining the confidentiality of your sign-in credentials, mobile device OTP codes, and connected Google credentials.
+                <strong>Account Credentials:</strong> You are solely responsible for maintaining the confidentiality of your sign-in credentials, one-time sign-in codes sent to your email, and connected Google credentials.
               </li>
               <li>
                 <strong>Accuracy of Checkout Details:</strong> You warrant that all shipping addresses, PIN codes, phone numbers, and recipient details entered during checkout are complete and accurate.

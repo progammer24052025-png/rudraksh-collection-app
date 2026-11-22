@@ -22,6 +22,7 @@
  *    on their next order.
  *  · The customer is emailed what was cancelled.
  */
+import { refreshCatalog } from "@/lib/server/catalog";
 import { itemsCancelledEmail, orderStatusEmail, ownerCustomerCancelledEmail, toEmailOrder } from "@/lib/server/email-templates";
 import { crossOriginResponse, isSameOrigin, rateLimit, tooManyRequestsResponse } from "@/lib/server/http";
 import { canCustomerCancel } from "@/lib/orders";
@@ -180,6 +181,8 @@ export async function POST(request: Request) {
         adminAdjustNumber(`products/${item.productId}/sold_count`, -item.quantity),
       );
     }
+
+    refreshCatalog();
 
     // A fully cancelled order did not really use its coupon.
     if (fullCancel && order.coupon_code && order.user_id) {

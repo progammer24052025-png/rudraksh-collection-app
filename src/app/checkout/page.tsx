@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { EmailCodeSignIn } from "@/components/email-code-sign-in";
 import Link from "next/link";
 import Image from "@/components/store-image";
 import {
@@ -420,9 +421,15 @@ function CheckoutContent() {
 
             <div className="relative my-4 flex items-center justify-center text-xs text-muted-foreground">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-              <span className="relative bg-card px-3 uppercase tracking-wider text-[11px]">or sign in with email</span>
+              <span className="relative bg-card px-3 uppercase tracking-wider text-[11px]">or get a code by email</span>
             </div>
 
+            <EmailCodeSignIn />
+
+            <details className="group rounded-xl border border-border px-4 py-3">
+              <summary className="cursor-pointer text-sm text-muted-foreground group-open:mb-3">
+                Have a password? Sign in with it
+              </summary>
             <SignInForm
               title=""
               subtitle=""
@@ -441,11 +448,12 @@ function CheckoutContent() {
                 <div className="mt-4 text-center text-xs text-muted-foreground">
                   Don&apos;t have an account?{" "}
                   <Link href="/account" className="text-primary hover:underline font-medium">
-                    Create an account / Sign in with mobile OTP
+                    Create an account
                   </Link>
                 </div>
               }
             />
+            </details>
           </div>
         </div>
       </div>

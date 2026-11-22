@@ -63,20 +63,13 @@ function base64Url(input: ArrayBuffer | Uint8Array | string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function signJwt(account: ServiceAccount): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
+const DATABASE_SCOPE =
+  "https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email";
+
+/** Signs any claims with the service account's key (RS256). */
+async function signWithKey(account: ServiceAccount, claims: Record<string, unknown>): Promise<string> {
   const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64Url(
-    JSON.stringify({
-      iss: account.client_email,
-      scope:
-        "https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp: now + 3600,
-    }),
-  );
-  const unsigned = `${header}.${claims}`;
+  const unsigned = `${header}.${base64Url(JSON.stringify(claims))}`;
 
   const pem = account.private_key.replace(/\\n/g, "\n");
   const der = pem
@@ -101,12 +94,20 @@ async function signJwt(account: ServiceAccount): Promise<string> {
 }
 
 type CachedToken = { token: string; expiresAt: number };
-let cached: CachedToken | null = null;
+const cachedTokens = new Map<string, CachedToken>();
 
-async function accessToken(account: ServiceAccount): Promise<string> {
+async function accessToken(account: ServiceAccount, scope = DATABASE_SCOPE): Promise<string> {
+  const cached = cachedTokens.get(scope);
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
 
-  const assertion = await signJwt(account);
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = await signWithKey(account, {
+    iss: account.client_email,
+    scope,
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  });
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -122,11 +123,38 @@ async function accessToken(account: ServiceAccount): Promise<string> {
   }
 
   const payload = (await response.json()) as { access_token: string; expires_in: number };
-  cached = {
+  cachedTokens.set(scope, {
     token: payload.access_token,
     expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
-  };
-  return cached.token;
+  });
+  return payload.access_token;
+}
+
+/** Project id and a Google access token for another Google API (e.g. sign-in accounts). */
+export async function googleApiAccess(scope: string): Promise<{ projectId: string; token: string } | null> {
+  const account = readServiceAccount();
+  const projectId =
+    account?.project_id || process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "";
+  if (!account || !projectId) return null;
+  return { projectId, token: await accessToken(account, scope) };
+}
+
+/**
+ * A Firebase custom sign-in token for `uid`, which the browser exchanges with
+ * signInWithCustomToken. Valid for one hour; only this server can make one.
+ */
+export async function createCustomToken(uid: string): Promise<string> {
+  const account = readServiceAccount();
+  if (!account) throw new Error("The server credentials are not set up.");
+  const now = Math.floor(Date.now() / 1000);
+  return signWithKey(account, {
+    iss: account.client_email,
+    sub: account.client_email,
+    aud: "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit",
+    iat: now,
+    exp: now + 3600,
+    uid,
+  });
 }
 
 function urlFor(account: ServiceAccount, path: string, token?: string): string {

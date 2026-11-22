@@ -4,6 +4,8 @@
  * visitor can read — and caches for a few minutes so crawlers and link
  * previews do not hit the database on every request.
  */
+import { revalidateTag } from "next/cache";
+
 import { DB_ROOT } from "@/lib/server/rtdb-admin";
 import type { Product, StoreSettings } from "@/lib/types";
 
@@ -58,4 +60,17 @@ export async function getActiveProducts(): Promise<Product[]> {
 /** The store's public settings (contact details, hours), for page metadata. */
 export async function getStoreSettings(): Promise<StoreSettings | null> {
   return get<StoreSettings>("settings");
+}
+
+/**
+ * Marks the cached shop data as stale after the server changes it (stock after
+ * an order or cancellation, a product's rating after a review), so shoppers see
+ * the change within seconds. Never throws: a stale copy refreshes on its own.
+ */
+export function refreshCatalog(): void {
+  try {
+    revalidateTag("catalog", { expire: 0 });
+  } catch (error) {
+    console.warn("Could not refresh the cached catalogue:", error);
+  }
 }

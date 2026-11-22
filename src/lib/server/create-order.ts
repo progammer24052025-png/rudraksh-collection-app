@@ -10,6 +10,7 @@
  * `payments/{paymentId}` first owns the order, and the other caller reads the
  * result instead of writing a second one.
  */
+import { refreshCatalog } from "@/lib/server/catalog";
 import {
   adminAdjustNumber,
   adminCreateIfAbsent,
@@ -344,6 +345,9 @@ export async function recordOrder(input: RecordOrderInput): Promise<RecordOrderR
       }),
     );
   }
+
+  // Shoppers see the new stock and "Bestseller" counts within seconds.
+  refreshCatalog();
 
   if (stockTaken) {
     // Only orders that actually moved stock may put it back on cancellation.
