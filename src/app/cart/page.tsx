@@ -23,7 +23,7 @@ import type { Coupon } from "@/lib/types";
 
 function CartContent() {
   const storeConfig = useStore();
-  const { items, updateQuantity, removeItem, getCartTotal, getProduct, setProducts, isHydrated } = useCart();
+  const { items, updateQuantity, removeItem, getCartTotal, getProduct, setProducts, isHydrated, pruneMissing } = useCart();
   const cartTotal = getCartTotal();
   // With distance pricing the charge is unknown until a PIN code is entered at
   // checkout, so the cart shows "calculated at checkout" instead of a guess.
@@ -51,6 +51,11 @@ function CartContent() {
         .then((r) => {
           setProducts(r.products);
           setCatalogue(r.products);
+          // Products deleted or taken off sale since they were added leave the bag.
+          if (r.products.length) {
+            const removed = pruneMissing(new Set(r.products.map((product) => product.id)));
+            if (removed) toast.info(`${removed} item${removed === 1 ? " is" : "s are"} no longer available and ${removed === 1 ? "was" : "were"} removed from your bag.`);
+          }
           // A saved bag can hold pieces that were since removed from the shop. They used to be
           // hidden here while still counted in the header badge and "N items", so the count
           // looked one too high. Take them out and say so. An empty catalogue means the fetch

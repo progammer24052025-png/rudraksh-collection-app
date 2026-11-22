@@ -11,6 +11,11 @@ type CartContextType = {
   removeItem: (productId: string, size: string, color: string) => void;
   updateQuantity: (productId: string, size: string, color: string, quantity: number) => void;
   clearCart: () => void;
+  /**
+   * Removes lines whose product is no longer on sale (deleted, hidden or its
+   * brand removed). Returns how many lines were dropped.
+   */
+  pruneMissing: (availableIds: Set<string>) => number;
   /** Swaps the whole bag — used when merging with the bag saved on the account. */
   replaceItems: (items: CartItem[]) => void;
   getCartTotal: () => number;
@@ -86,6 +91,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => setItems([]), []);
   const replaceItems = useCallback((next: CartItem[]) => setItems(next), []);
+  const pruneMissing = useCallback(
+    (availableIds: Set<string>) => {
+      const missing = items.filter((item) => !availableIds.has(item.productId)).length;
+      if (missing) setItems((prev) => prev.filter((item) => availableIds.has(item.productId)));
+      return missing;
+    },
+    [items],
+  );
 
   const getCartTotal = useCallback(() => {
     return items.reduce((total, item) => {
@@ -114,6 +127,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         updateQuantity,
         clearCart,
         replaceItems,
+        pruneMissing,
         getCartTotal,
         getCartCount,
         getProduct,

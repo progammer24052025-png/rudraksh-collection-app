@@ -168,8 +168,15 @@ function BannerSection() {
 
 /** The clothing rail — browse new arrivals as pieces hanging on a rack. */
 function NewOnTheRail({ products }: { products: Product[] }) {
-  const candidates: RailGarment[] = products
-    .filter((product) => product.images.length > 0)
+  // Products ticked "New arrival" in admin hang first (newest first); the rail
+  // is topped up with the latest additions only when fewer than three are ticked.
+  const newest = (a: Product, b: Product) => (b.created_at || "").localeCompare(a.created_at || "");
+  const withPhotos = products.filter((product) => product.images.length > 0);
+  const ticked = withPhotos.filter((product) => product.is_new).sort(newest);
+  const others = withPhotos.filter((product) => !product.is_new).sort(newest);
+  const ordered = ticked.length >= 3 ? ticked : [...ticked, ...others];
+  const required = new Set(ticked.map((product) => product.id));
+  const candidates: RailGarment[] = ordered
     .slice(0, 16)
     .map((product) => ({
       id: product.id,
@@ -184,7 +191,7 @@ function NewOnTheRail({ products }: { products: Product[] }) {
     }));
   // More candidates than slots: pieces whose photos cannot be separated (lifestyle shots)
   // are skipped, so everything on the rail hangs as cloth.
-  const cloth = useClothItems(candidates, 6, 2);
+  const cloth = useClothItems(candidates, 6, 2, required);
 
   if (candidates.length === 0) return null;
   if (!cloth.ready) {
@@ -418,7 +425,9 @@ function HomePageContent({ googleRating }: { googleRating: GoogleRating | null }
   }, []);
 
   useEffect(() => {
-    fetchProducts({ limit: 16 }).then(r => setProducts(r.products)).catch(() => {});
+    // The whole live catalogue: the rail needs every ticked new arrival, not
+    // just the latest few products.
+    fetchProducts().then(r => setProducts(r.products)).catch(() => {});
   }, []);
 
   return (

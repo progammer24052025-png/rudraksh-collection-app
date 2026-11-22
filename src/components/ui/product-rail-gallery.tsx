@@ -63,9 +63,15 @@ function imageLoads(src: string) {
  * than hung as a framed photo. When fewer than `min` pieces separate, the first
  * `max` candidates are returned unchanged so the rail is never empty.
  */
-export function useClothItems(candidates: RailGarment[], max: number, min = 3) {
+/**
+ * `required` ids always hang on the rail, using their photo as-is if it
+ * cannot be cut out, so a product ticked "New arrival" is never left off.
+ */
+export function useClothItems(candidates: RailGarment[], max: number, min = 3, required?: Set<string>) {
   const [state, setState] = React.useState({ ready: false, items: [] as RailGarment[] });
-  const key = candidates.map((item) => `${item.id}:${item.cutout ?? ""}:${item.image ?? ""}`).join("|");
+  const key =
+    candidates.map((item) => `${item.id}:${item.cutout ?? ""}:${item.image ?? ""}`).join("|") +
+    `#${required ? Array.from(required).join(",") : ""}`;
 
   React.useEffect(() => {
     if (!candidates.length) {
@@ -91,6 +97,7 @@ export function useClothItems(candidates: RailGarment[], max: number, min = 3) {
         }
         if (!alive) return;
         if (cloth) found.push({ ...item, cutout: cloth });
+        else if (required?.has(item.id)) found.push(item);
       }
       setState({ ready: true, items: found.length >= min ? found : candidates.slice(0, max) });
     })();

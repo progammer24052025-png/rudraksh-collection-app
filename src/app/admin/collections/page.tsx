@@ -18,6 +18,7 @@ import {
   Package,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadImage } from "@/lib/media-client";
 
 import { AdminNav } from "@/components/admin-nav";
 import { Button } from "@/components/ui/button";
@@ -162,15 +163,17 @@ export default function AdminCollectionsPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setDraft((prev) => ({ ...prev, image: result }));
-        toast.success("Cover image file loaded");
-      }
-    };
-    reader.readAsDataURL(file);
+    // Uploaded to photo storage so the picture shows on every device, and the
+    // collection list stays small.
+    const toastId = toast.loading("Uploading…");
+    uploadImage(file, file.name)
+      .then((url) => {
+        setDraft((prev) => ({ ...prev, image: url }));
+        toast.success("Picture uploaded", { id: toastId });
+      })
+      .catch((cause: unknown) => {
+        toast.error(cause instanceof Error ? cause.message : "Upload failed", { id: toastId });
+      });
   };
 
   const handleSave = async (e: React.FormEvent) => {

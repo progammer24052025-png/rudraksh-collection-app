@@ -298,3 +298,16 @@ export async function adminDelete(path: string): Promise<void> {
   });
   if (!response.ok) throw new Error(`RTDB delete failed (${response.status})`);
 }
+
+/** The child keys under `path`, without downloading their contents. */
+export async function adminKeys(path: string): Promise<string[]> {
+  const account = readServiceAccount();
+  if (!account) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
+  const token = await accessToken(account);
+  const response = await fetch(`${urlFor(account, path)}?shallow=true&access_token=${encodeURIComponent(token)}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`RTDB read failed (${response.status})`);
+  const value = (await response.json()) as Record<string, unknown> | null;
+  return value && typeof value === "object" ? Object.keys(value) : [];
+}

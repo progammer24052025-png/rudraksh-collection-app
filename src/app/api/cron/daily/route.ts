@@ -24,6 +24,7 @@ import { timingSafeEqual } from "node:crypto";
 import { SHIPPED_FOLLOW_UP_DAYS, resolveAutomation } from "@/lib/automation";
 import { announceNewProducts, type AnnounceResult } from "@/lib/server/announce";
 import { rollupAnalytics } from "@/lib/server/analytics-rollup";
+import { sweepUnusedMedia } from "@/lib/server/media";
 import { dailyDigestEmail, type DigestSection } from "@/lib/server/email-templates";
 import { isSameOrigin } from "@/lib/server/http";
 import { callerFrom } from "@/lib/server/id-token";
@@ -222,6 +223,13 @@ async function run(options: { forceEmail: boolean; announce: boolean }): Promise
     console.error("Analytics roll-up failed:", error);
     return { days: 0, pruned: 0 };
   });
+  // Photos removed from products, or uploaded and never saved, are deleted
+  // after a day so storage only holds pictures the shop still uses.
+  const photosSwept = await sweepUnusedMedia().catch((error) => {
+    console.error("Photo sweep failed:", error);
+    return 0;
+  });
+  if (photosSwept) console.info(`Removed ${photosSwept} unused photo(s).`);
   const cleanedRateLimits = await adminDelete("rateLimits").then(
     () => true,
     () => false,

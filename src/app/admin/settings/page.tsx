@@ -249,6 +249,31 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const [moving, setMoving] = useState(false);
+  const movePictures = async () => {
+    setMoving(true);
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      const response = await fetch("/api/admin/media/migrate", {
+        method: "POST",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; moved?: number; missing?: string[]; error?: string };
+      if (!data.ok) {
+        toast.error(data.error || "Could not move the pictures.");
+        return;
+      }
+      toast.success(data.moved ? `${data.moved} picture(s) moved to photo storage` : "All pictures are already in photo storage");
+      if (data.missing?.length) {
+        toast.warning(`Please upload the photos again for: ${data.missing.join(", ")}`, { duration: 15000 });
+      }
+    } catch {
+      toast.error("Could not reach the server. Try again.");
+    } finally {
+      setMoving(false);
+    }
+  };
+
   const [backingUp, setBackingUp] = useState(false);
   const downloadBackup = async () => {
     setBackingUp(true);
@@ -795,6 +820,10 @@ export default function AdminSettingsPage() {
                 <Button type="button" variant="outline" onClick={sendSummaryNow} disabled={sendingSummary}>
                   {sendingSummary ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   Send summary now
+                </Button>
+                <Button type="button" variant="outline" onClick={movePictures} disabled={moving}>
+                  {moving ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                  Move pictures to photo storage
                 </Button>
                 <Button type="button" variant="outline" onClick={downloadBackup} disabled={backingUp}>
                   {backingUp ? <Spinner className="mr-2 h-4 w-4" /> : null}

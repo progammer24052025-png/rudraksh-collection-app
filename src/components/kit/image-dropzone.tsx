@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Download, ImagePlus, Link2, Star, Trash2, UploadCloud } from "lucide-react";
+import { ArrowDown, ArrowUp, ImagePlus, Link2, Star, Trash2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import { Spinner } from "@/components/ui/spinner";
+import { uploadImage } from "@/lib/media-client";
 export function slugifyName(value: string) {
   return value
     .toLowerCase()
@@ -18,33 +19,11 @@ export function slugifyName(value: string) {
     .slice(0, 60);
 }
 
-async function compressToWebp(file: File, maxEdge = 1400, quality = 0.82): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas not supported in this browser");
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close?.();
-
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob((result) => resolve(result), "image/webp", quality),
-  );
-  if (!blob) throw new Error("Could not compress this image");
-  return blob;
-}
-
-type Prepared = { path: string; objectUrl: string; fileName: string };
 
 /**
- * Reference #3 — Image dropzone, re-skinned.
- *
- * The deployment serves static files read-only, so a dropped image is
- * compressed, named by our convention and handed back as a download that
- * belongs in `public/<folder>/`. The product stores the public path and links
- * up as soon as the file is committed and deployed.
+ * Photo picker for admin. Dropped or chosen photos are shrunk on this device
+ * and uploaded straight away, so they appear on every device as soon as the
+ * product is saved. Pasting an image address (https://…) also works.
  */
 export function ImageDropzone({
   value,
@@ -68,14 +47,6 @@ export function ImageDropzone({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [urlDraft, setUrlDraft] = useState("");
-  const [prepared, setPrepared] = useState<Prepared[]>([]);
-
-  const preparedByPath = useMemo(() => {
-    const map = new Map<string, Prepared>();
-    for (const item of prepared) map.set(item.path, item);
-    return map;
-  }, [prepared]);
-
   const base = slugifyName(name) || "image";
   const cleanFolder = folder.replace(/^\/+|\/+$/g, "");
 
@@ -86,22 +57,16 @@ export function ImageDropzone({
       setError(null);
       setBusy(true);
       try {
-        const additions: Prepared[] = [];
+        const additions: string[] = [];
         const start = value.length;
         for (const [index, file] of list.entries()) {
           if (start + index >= max) {
             setError(`You can keep up to ${max} images.`);
             break;
           }
-          const blob = await compressToWebp(file);
-          const fileName = `${base}${start + index > 0 ? `-${start + index + 1}` : ""}.webp`;
-          const path = `/${cleanFolder}/${fileName}`;
-          additions.push({ path, fileName, objectUrl: URL.createObjectURL(blob) });
+          additions.push(await uploadImage(file, `${base}${start + index > 0 ? `-${start + index + 1}` : ""}`));
         }
-        if (additions.length) {
-          setPrepared((current) => [...current, ...additions]);
-          onChange([...value, ...additions.map((item) => item.path)]);
-        }
+        if (additions.length) onChange([...value, ...additions]);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not read that image");
       } finally {
@@ -155,7 +120,7 @@ export function ImageDropzone({
           <UploadCloud className="h-7 w-7 text-sage-ink" aria-hidden />
         )}
         <p className="text-sm font-medium text-foreground">
-          {busy ? "Preparing image…" : "Drop images here"}
+          {busy ? "Uploading…" : "Drop images here"}
         </p>
         <p className="max-w-sm text-xs text-muted-foreground">
           Compressed to WebP and named <span className="font-mono text-[11px]">{base}.webp</span> for{" "}
@@ -210,7 +175,6 @@ export function ImageDropzone({
       {value.length ? (
         <ul className="flex flex-col gap-2">
           {value.map((src, index) => {
-            const ready = preparedByPath.get(src);
             return (
               <li
                 key={`${src}-${index}`}
@@ -218,7 +182,7 @@ export function ImageDropzone({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={ready?.objectUrl ?? src}
+                  src={src}
                   alt=""
                   className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
                 />
@@ -226,19 +190,8 @@ export function ImageDropzone({
                   <p className="truncate font-mono text-[11px] text-muted-foreground">{src}</p>
                   <p className="text-xs text-foreground">
                     {index === 0 ? "Cover image" : `Image ${index + 1}`}
-                    {ready ? " · needs committing to the repo" : ""}
                   </p>
                 </div>
-                {ready ? (
-                  <a
-                    href={ready.objectUrl}
-                    download={ready.fileName}
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-sage-ink hover:bg-sage/10"
-                  >
-                    <Download className="h-3.5 w-3.5" aria-hidden />
-                    Save file
-                  </a>
-                ) : null}
                 {index > 0 ? (
                   <button
                     type="button"

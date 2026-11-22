@@ -21,7 +21,8 @@ async function get<T>(path: string, query = ""): Promise<T | null> {
   if (!root) return null;
   try {
     const response = await fetch(`${root}/${DB_ROOT}/${path}.json${query ? `?${query}` : ""}`, {
-      next: { revalidate: REVALIDATE_SECONDS },
+      // Tagged so admin saves and deletes can refresh pages at once.
+      next: { revalidate: REVALIDATE_SECONDS, tags: ["catalog"] },
     });
     if (!response.ok) return null;
     return (await response.json()) as T | null;

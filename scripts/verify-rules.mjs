@@ -42,6 +42,7 @@ const checks = [
   ["serverState", "deny", "server only"],
   ["pincodeGeo", "deny", "server only"],
   ["analytics", "deny", "visitor statistics are admin only"],
+  ["media", "deny", "photos are served only through /media/…"],
 ];
 
 if (keyArg) {

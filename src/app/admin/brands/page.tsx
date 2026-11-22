@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { catalogAction, uploadImage } from "@/lib/media-client";
 
 import { AdminNav } from "@/components/admin-nav";
 import { BrandLogoBadge } from "@/components/brand-logo-badge";
@@ -37,7 +38,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  deleteBrand,
   saveBrand,
   subscribeBrands,
   subscribeCategories,
@@ -88,6 +88,8 @@ export default function AdminBrandsPage() {
   const [draft, setDraft] = useState<BrandDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Brand | null>(null);
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [source, setSource] = useState<Brand["category_source"]>(null);
@@ -165,15 +167,17 @@ export default function AdminBrandsPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setDraft((prev) => ({ ...prev, logo: result }));
-        toast.success("Logo file loaded");
-      }
-    };
-    reader.readAsDataURL(file);
+    // Uploaded to photo storage so the picture shows on every device, and the
+    // brand list stays small.
+    const toastId = toast.loading("Uploading…");
+    uploadImage(file, file.name)
+      .then((url) => {
+        setDraft((prev) => ({ ...prev, logo: url }));
+        toast.success("Picture uploaded", { id: toastId });
+      })
+      .catch((cause: unknown) => {
+        toast.error(cause instanceof Error ? cause.message : "Upload failed", { id: toastId });
+      });
   };
 
   const categoryOptions = useMemo(
@@ -265,6 +269,7 @@ export default function AdminBrandsPage() {
       });
 
       toast.success(draft.id ? "Brand updated" : "Brand created");
+      void catalogAction({ action: "refresh" }).catch(() => {});
       setDialogOpen(false);
       setDraft(EMPTY_DRAFT);
     } catch (error) {
@@ -277,17 +282,25 @@ export default function AdminBrandsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      // Removing a brand removes its products with it, so the catalogue can
-      // never point at a partner that no longer exists.
-      const { deletedProducts } = await deleteBrand(deleteTarget.id);
+      // Removing a brand removes its products with it, on the server, so the
+      // catalogue can never point at a partner that no longer exists.
+      setDeleting(true);
+      const { deletedProducts } = await catalogAction<{ deletedProducts: number }>({
+        action: "delete-brand",
+        id: deleteTarget.id,
+        confirmName,
+      });
       toast.success(
         deletedProducts
           ? `Deleted brand "${deleteTarget.name}" and ${deletedProducts} product${deletedProducts === 1 ? "" : "s"}`
           : `Deleted brand "${deleteTarget.name}"`,
       );
       setDeleteTarget(null);
+      setConfirmName("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete brand");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -811,7 +824,15 @@ export default function AdminBrandsPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setDeleteTarget(null);
+            setConfirmName("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Brand?</DialogTitle>
@@ -834,12 +855,42 @@ export default function AdminBrandsPage() {
               })()}
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-brand-name">
+              Type <strong>{deleteTarget?.name}</strong> to confirm
+            </Label>
+            <Input
+              id="confirm-brand-name"
+              autoComplete="off"
+              value={confirmName}
+              onChange={(event) => setConfirmName(event.target.value)}
+              placeholder={deleteTarget?.name}
+            />
+            <p className="text-xs text-muted-foreground">
+              Its products, their photos, reviews and back-in-stock requests are removed from every
+              device. Past orders and invoices keep their own copy and are not affected.
+            </p>
+          </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => {
+                setDeleteTarget(null);
+                setConfirmName("");
+              }}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Delete Brand
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={
+                deleting ||
+                confirmName.trim().toLowerCase() !== (deleteTarget?.name ?? "").trim().toLowerCase()
+              }
+            >
+              {deleting ? "Deleting…" : "Delete brand and its products"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -183,6 +183,10 @@
       "analytics": {
         ".read": "auth != null && root.child('rudraksh/admins').child(auth.uid).exists()",
         ".write": false
+      },
+      "media": {
+        ".read": false,
+        ".write": false
       }
     }
   }

@@ -162,7 +162,7 @@ type CompletedOrderSummary = {
 };
 
 function CheckoutContent() {
-  const { items, getCartTotal, getProduct, clearCart, setProducts, isHydrated } = useCart();
+  const { items, getCartTotal, getProduct, clearCart, setProducts, isHydrated, pruneMissing } = useCart();
   const storeConfig = useStore();
   const { user, profile, loading, loginWithGoogle } = useAuth();
 
@@ -355,7 +355,15 @@ function CheckoutContent() {
 
   useEffect(() => {
     if (items.length > 0) {
-      fetchProducts({ limit: 200 }).then(r => setProducts(r.products)).catch(() => {});
+      fetchProducts({ limit: 500 })
+        .then((r) => {
+          setProducts(r.products);
+          if (r.products.length) {
+            const removed = pruneMissing(new Set(r.products.map((product) => product.id)));
+            if (removed) toast.info(`${removed} item${removed === 1 ? " is" : "s are"} no longer available and ${removed === 1 ? "was" : "were"} removed from your bag.`);
+          }
+        })
+        .catch(() => {});
     }
   }, [items.length, setProducts]);
 

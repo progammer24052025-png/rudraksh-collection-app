@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/admin-nav";
 import { toast } from "sonner";
+import { catalogAction } from "@/lib/media-client";
 import {
   effectivePrice,
   formatPrice,
-  removeValue,
   subscribeCategories,
   subscribeProducts,
 } from "@/lib/firebase";
@@ -77,11 +77,12 @@ export default function AdminProductsPage() {
   }, [products, search, categoryFilter, categories]);
 
   const handleDelete = async (product: Product) => {
-    if (!confirm(`Delete “${product.name}”? This cannot be undone.`)) return;
+    if (!confirm(`Delete “${product.name}”? It is removed from the shop, carts, wishlists and search, with its photos and reviews. This cannot be undone.`)) return;
     setDeleting(product.id);
     try {
-      await removeValue(["products", product.id]);
-      toast.success("Product deleted");
+      // On the server, so its photos, reviews and back-in-stock requests go too.
+      await catalogAction({ action: "delete-product", id: product.id });
+      toast.success("Product deleted everywhere");
     } catch (error) {
       console.error(error);
       toast.error("Could not delete the product");

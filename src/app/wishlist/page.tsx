@@ -18,9 +18,26 @@ function WishlistContent() {
   const { addItem } = useCart();
   const { ids: wishlist, remove } = useWishlist();
 
-  useEffect(() => subscribeProducts(setProducts), []);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(
+    () =>
+      subscribeProducts((list) => {
+        setProducts(list);
+        setLoaded(true);
+      }),
+    [],
+  );
 
-  const wishlistProducts = products.filter(p => wishlist.includes(p.id));
+  // Only products still on sale; anything deleted or hidden since it was saved
+  // is dropped from the saved list too, so it never comes back.
+  const onSale = products.filter((p) => p.status === "active");
+  const wishlistProducts = onSale.filter((p) => wishlist.includes(p.id));
+  useEffect(() => {
+    if (!loaded || !products.length) return;
+    const available = new Set(onSale.map((p) => p.id));
+    for (const id of wishlist) if (!available.has(id)) remove(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the live list changes
+  }, [loaded, products, wishlist]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

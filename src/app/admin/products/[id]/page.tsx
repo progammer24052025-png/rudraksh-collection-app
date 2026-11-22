@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { catalogAction } from "@/lib/media-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -184,6 +185,8 @@ export default function AdminProductEditPage() {
     try {
       await writeValue(["products", productId], payload);
       toast.success(isNew ? "Product created" : "Product updated");
+      // Search pages and link previews pick up the change at once.
+      void catalogAction({ action: "refresh" }).catch(() => {});
       if (restocked) void notifyRestock(productId);
       router.push("/admin/products");
     } catch (error) {
