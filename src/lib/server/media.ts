@@ -24,8 +24,11 @@ export type MediaRecord = {
   created_at: string;
 };
 
-/** After compression a product photo is ~100–300 KB; this leaves room for logos. */
-export const MAX_MEDIA_BYTES = 1_200_000;
+/**
+ * After compression a product photo is ~100–300 KB. The higher ceiling is for
+ * logos moved from old records, which were saved uncompressed (up to ~1.3 MB).
+ */
+export const MAX_MEDIA_BYTES = 2_500_000;
 export const MEDIA_TYPES = new Set(["image/webp", "image/png", "image/jpeg", "image/gif", "image/svg+xml"]);
 export const MEDIA_PREFIX = "/media/";
 
@@ -54,11 +57,19 @@ function matchesType(type: string, bytes: Buffer): boolean {
   }
 }
 
+/** The raster type the bytes really are, whatever the label says. */
+function sniffType(bytes: Buffer): string | null {
+  for (const type of ["image/png", "image/jpeg", "image/gif", "image/webp"]) {
+    if (matchesType(type, bytes)) return type;
+  }
+  return null;
+}
+
 export type StoreResult = { ok: true; url: string; bytes: number } | { ok: false; error: string };
 
 /** Validates and stores one picture, returning its permanent address. */
 export async function storeMedia(input: { type: string; base64: string; name?: string }): Promise<StoreResult> {
-  const type = input.type.toLowerCase().trim();
+  let type = input.type.toLowerCase().trim();
   if (!MEDIA_TYPES.has(type)) return { ok: false, error: "Only WebP, PNG, JPEG, GIF or SVG images can be stored." };
 
   let bytes: Buffer;
@@ -69,7 +80,14 @@ export async function storeMedia(input: { type: string; base64: string; name?: s
   }
   if (!bytes.length) return { ok: false, error: "That image is empty." };
   if (bytes.length > MAX_MEDIA_BYTES) return { ok: false, error: "That image is too large even after compression." };
-  if (!matchesType(type, bytes)) return { ok: false, error: "That file is not the image type it claims to be." };
+  if (!matchesType(type, bytes)) {
+    // Old records often label a PNG as JPEG. A real picture of another allowed
+    // raster type is stored and served as what it actually is; anything that
+    // is not a recognisable picture is still refused.
+    const actual = type === "image/svg+xml" ? null : sniffType(bytes);
+    if (!actual) return { ok: false, error: "That file is not the image type it claims to be." };
+    type = actual;
+  }
 
   const id = randomBytes(15).toString("base64url");
   const record: MediaRecord = {
