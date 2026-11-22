@@ -14,6 +14,8 @@
  * Reads are anonymous, so the database rules still decide what is public —
  * this route can never show more than a visitor could already read.
  */
+import { unstable_cache } from "next/cache";
+
 import { DB_ROOT } from "@/lib/server/rtdb-admin";
 
 /** Public roots and how long the server keeps each one between database reads. */
@@ -28,6 +30,25 @@ const ROOTS: Record<string, { revalidate: number; tags: string[]; cdn: number }>
 };
 
 const SEGMENT = /^[A-Za-z0-9_-]{1,160}$/;
+
+/**
+ * Pictures saved inside records (`data:` text, from before photo storage)
+ * made the brand list 7 MB, so every shopper waited for it. Large ones are
+ * left out here; the shop shows the brand name instead. Admin → Settings →
+ * "Move pictures to photo storage" turns them into real photo addresses.
+ */
+const MAX_EMBEDDED_PICTURE = 20_000;
+
+function withoutEmbeddedPictures(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutEmbeddedPictures);
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === "string" && entry.startsWith("data:") && entry.length > MAX_EMBEDDED_PICTURE) continue;
+    out[key] = withoutEmbeddedPictures(entry);
+  }
+  return out;
+}
 
 function databaseUrl(): string {
   const explicit = process.env.FIREBASE_DATABASE_URL || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
@@ -50,14 +71,23 @@ export async function GET(_request: Request, context: { params: Promise<{ path: 
 
   let value: unknown = null;
   try {
-    const response = await fetch(`${base}/${DB_ROOT}/${path.join("/")}.json`, {
-      next: { revalidate: config.revalidate, tags: config.tags },
-    });
-    if (response.status === 401 || response.status === 403) return notFound();
-    if (!response.ok) {
+    // The trimmed result is what gets cached: the raw read can be larger than
+    // the 2 MB the server cache accepts (old pictures stored inside records).
+    const read = unstable_cache(
+      async (): Promise<{ status: number; value?: unknown }> => {
+        const response = await fetch(`${base}/${DB_ROOT}/${path.join("/")}.json`, { cache: "no-store" });
+        if (!response.ok) return { status: response.status };
+        return { status: 200, value: withoutEmbeddedPictures(await response.json()) };
+      },
+      ["public-data", ...path],
+      { revalidate: config.revalidate, tags: config.tags },
+    );
+    const result = await read();
+    if (result.status === 401 || result.status === 403) return notFound();
+    if (result.status !== 200) {
       return Response.json(null, { status: 502, headers: { "cache-control": "no-store" } });
     }
-    value = await response.json();
+    value = result.value;
   } catch {
     return Response.json(null, { status: 502, headers: { "cache-control": "no-store" } });
   }
